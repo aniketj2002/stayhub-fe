@@ -1,0 +1,103 @@
+name: Frontend CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+  PREFIX: ${{ vars.PREFIX || 'aniket' }}
+
+jobs:
+  test:
+    name: Run Frontend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Vitest Suite
+        run: npm test
+
+  deploy:
+    name: Build & Deploy to S3 + CloudFront
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Production SPA
+        run: VITE_API_BASE_URL="" npm run build
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Discover S3 Bucket & CloudFront Distribution
+        id: aws-discover
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET_NAME="${PREFIX}-stayhub-frontend-${ACCOUNT_ID}"
+          echo "bucket=${BUCKET_NAME}" >> "$GITHUB_OUTPUT"
+
+          # Discover CloudFront Distribution ID by tag or comment
+          DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Comment=='${PREFIX}-stayhub unified CDN (Frontend + API + Media)'].Id | [0]" \
+            --output text)
+          if [ -z "$DIST_ID" ] || [ "$DIST_ID" = "None" ]; then
+            DIST_ID=$(aws cloudfront list-distributions \
+              --query "DistributionList.Items[0].Id" \
+              --output text)
+          fi
+          echo "dist_id=${DIST_ID}" >> "$GITHUB_OUTPUT"
+          echo "Discovered Bucket: ${BUCKET_NAME}, CloudFront ID: ${DIST_ID}"
+
+      - name: Sync Static Assets to S3
+        run: |
+          BUCKET="${{ steps.aws-discover.outputs.bucket }}"
+
+          # Sync versioned hashed assets with 1-year immutable cache
+          aws s3 sync dist "s3://${BUCKET}" \
+            --delete \
+            --exclude "index.html" \
+            --cache-control "public, max-age=31536000, immutable" \
+            --region "${AWS_REGION}"
+
+          # Copy index.html with no-cache so SPA updates immediately
+          aws s3 cp dist/index.html "s3://${BUCKET}/index.html" \
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --content-type "text/html; charset=utf-8" \
+            --region "${AWS_REGION}"
+
+      - name: Invalidate CloudFront Cache
+        if: steps.aws-discover.outputs.dist_id != '' && steps.aws-discover.outputs.dist_id != 'None'
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ steps.aws-discover.outputs.dist_id }}" \
+            --paths "/*"
