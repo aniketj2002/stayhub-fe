@@ -1,0 +1,97 @@
+import type { HostListing, ListingVersion, PublicListing, Quote } from '../features/listings/types';
+export const version: ListingVersion = {
+  id: 'version-2',
+  version_no: 2,
+  status: 'draft',
+  wizard_step: 4,
+  property_type: 'apartment',
+  title: 'A quiet Lisbon home',
+  description: 'Room to unwind.',
+  address_line1: 'Test Street 1',
+  city: 'Lisbon',
+  country: 'PT',
+  timezone: 'Europe/Lisbon',
+  max_guests: 4,
+  base_price_minor: 10000,
+  cleaning_fee_minor: 1000,
+  currency: 'EUR',
+  instant_book: true,
+  check_in_time: '15:00',
+  check_out_time: '11:00',
+  house_rules: 'No smoking.',
+  cancellation_policy: 'flexible',
+  amenities: ['wifi'],
+  media_ids: [],
+  photos: [],
+};
+export const hostDetail: HostListing = {
+  listing: {
+    id: 'home-1',
+    status: 'live',
+    live_version_id: 'version-1',
+    working_version_id: 'version-2',
+  },
+  working_version: version,
+  live_version: {
+    ...version,
+    id: 'version-1',
+    version_no: 1,
+    status: 'approved',
+    title: 'Original live title',
+  },
+  check_results: [],
+  host_access: { role: 'owner' },
+};
+export const publicDetail: PublicListing = {
+  id: 'home-1',
+  title: 'A quiet Lisbon home',
+  description: 'Room to unwind.',
+  property_type: 'apartment',
+  city: 'Lisbon',
+  country: 'PT',
+  timezone: 'Europe/Lisbon',
+  max_guests: 4,
+  base_price_minor: 10000,
+  cleaning_fee_minor: 1000,
+  currency: 'EUR',
+  instant_book: true,
+  check_in_time: '15:00',
+  check_out_time: '11:00',
+  house_rules: 'No smoking.',
+  amenities: [{ code: 'wifi', label: 'Wi-Fi', category: 'essentials' }],
+  photos: [],
+  cancellation_policy: {
+    code: 'flexible',
+    name: 'Flexible',
+    description: 'Server policy description.',
+  },
+  host: { id: 'host-1', full_name: 'Test Host', joined_at: '2026-01-01T00:00:00Z' },
+  rating: null,
+  unavailable_dates: [],
+};
+export function quote(guests = 1): Quote {
+  return {
+    listing_id: 'home-1',
+    listing_version_id: 'version-1',
+    check_in: '2030-02-01',
+    check_out: '2030-02-03',
+    guests,
+    currency: 'EUR',
+    timezone: 'Europe/Lisbon',
+    instant_book: true,
+    breakdown: {
+      nights: 2,
+      nightly_rate_minor: 10000,
+      nightly_total_minor: 20000,
+      cleaning_fee_minor: 1000,
+      guest_fee_bps: 1400,
+      guest_fee_minor: 2940,
+      guest_total_minor: 23940,
+    },
+    cancellation_policy: publicDetail.cancellation_policy,
+    refund_milestones: [],
+  };
+}
+export function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(status < 400 ? { data } : { error: data }), { status });
+}
