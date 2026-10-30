@@ -6487,3 +6487,1242 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* =========================================================================
+   HOST DASHBOARD: TODAY & EARNINGS PAGES (Reference Screens)
+   ========================================================================= */
+
+.host-today-page,
+.host-earnings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+}
+
+/* Toast Notification */
+.host-toast {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  background-color: #111827;
+  color: #ffffff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+  z-index: 1000;
+  animation: hostToastSlideIn 0.2s ease-out;
+}
+
+@keyframes hostToastSlideIn {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Top Page Header */
+.host-page-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.host-page-title-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.host-page-main-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+
+.host-today-subtitle {
+  font-size: 13.5px;
+  color: #6b7280;
+  margin: 4px 0 0;
+}
+
+.host-select-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.host-pill-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #ffffff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234b5563' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")
+    no-repeat right 12px center;
+  border: 1px solid #d1d5db;
+  border-radius: 9999px;
+  padding: 7px 32px 7px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.host-pill-select:focus {
+  border-color: #0b6b5d;
+}
+
+.host-page-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.host-outline-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 9999px;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.host-outline-action-btn:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.host-pill-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 9999px;
+  background-color: #0b6b5d;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.15s;
+}
+
+.host-pill-primary-btn:hover {
+  background-color: #085449;
+}
+
+.host-pill-small-btn {
+  padding: 6px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 9999px;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  color: #111827;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.host-pill-small-btn:hover {
+  background-color: #f3f4f6;
+}
+
+/* =========================================================================
+   TODAY PAGE STYLES
+   ========================================================================= */
+
+/* Alert Banner */
+.host-alert-banner {
+  background-color: #fefce8;
+  border: 1px solid #fef08a;
+  border-radius: 12px;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.host-alert-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.host-alert-clock-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #fef9c3;
+  color: #ca8a04;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.host-alert-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.host-alert-headline {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.host-alert-subtext {
+  font-size: 12.5px;
+  color: #6b7280;
+  margin: 2px 0 0;
+}
+
+.host-alert-review-btn {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 9999px;
+  background-color: #0b6b5d;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s;
+}
+
+.host-alert-review-btn:hover {
+  background-color: #085449;
+}
+
+/* Filter Pills */
+.host-pill-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.host-pill-filter {
+  padding: 6px 14px;
+  border-radius: 9999px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.host-pill-filter:hover {
+  background-color: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.host-pill-filter.active {
+  background-color: #111827;
+  color: #ffffff;
+  border-color: #111827;
+  font-weight: 600;
+}
+
+/* Two-Column Today Layout */
+.host-today-two-columns {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: start;
+}
+
+.host-today-left-col {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.host-today-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.host-section-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.host-section-eyebrow {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #6b7280;
+  letter-spacing: 0.6px;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.host-section-eyebrow-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.host-text-link {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0b6b5d;
+  text-decoration: none;
+}
+
+.host-text-link:hover {
+  text-decoration: underline;
+}
+
+/* Today 3-Cards Row / Grid */
+.host-today-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.host-stay-card {
+  background: #ffffff;
+  border: 1px solid #eaedf0;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: box-shadow 0.15s ease;
+}
+
+.host-stay-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.host-stay-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.host-stay-guest-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.host-stay-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: #1e3a8a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.host-stay-name-dates {
+  display: flex;
+  flex-direction: column;
+}
+
+.host-stay-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.3;
+}
+
+.host-stay-dates {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.host-stay-badges-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.host-stay-sub-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.host-stay-sub-badge--orange {
+  color: #ea580c;
+}
+
+.host-stay-sub-badge--green {
+  color: #166534;
+}
+
+.host-stay-listing-name {
+  font-size: 12.5px;
+  color: #4b5563;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.host-stay-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.host-stay-btn-primary {
+  padding: 7px 14px;
+  border: none;
+  border-radius: 9999px;
+  background-color: #0b6b5d;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.host-stay-btn-primary:hover {
+  background-color: #085449;
+}
+
+.host-stay-btn-outline {
+  padding: 6px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 9999px;
+  background-color: #ffffff;
+  color: #374151;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.host-stay-btn-outline:hover {
+  background-color: #f3f4f6;
+}
+
+/* Upcoming & Reviews Card Container */
+.host-list-container {
+  background: #ffffff;
+  border: 1px solid #eaedf0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.host-list-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  gap: 16px;
+}
+
+.host-list-item-row.border-top {
+  border-top: 1px solid #eaedf0;
+}
+
+.host-list-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.host-list-info {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.host-list-guest-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.host-list-subnote {
+  font-size: 12.5px;
+  color: #6b7280;
+}
+
+.host-list-right-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.host-days-left-text {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Empty filter box */
+.host-empty-filter-box {
+  background: #ffffff;
+  border: 1px dashed #d1d5db;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Right Widgets */
+.host-widget-card {
+  background: #ffffff;
+  border: 1px solid #eaedf0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.host-widget-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.host-widget-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.host-widget-step-count {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.host-progress-track {
+  width: 100%;
+  height: 5px;
+  background-color: #e5e7eb;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.host-progress-fill {
+  height: 100%;
+  background-color: #0b6b5d;
+  border-radius: 9999px;
+}
+
+.host-checklist {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.host-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.host-checklist-item.completed {
+  color: #374151;
+}
+
+.host-checklist-item.pending {
+  color: #9ca3af;
+}
+
+.host-check-icon {
+  color: #0b6b5d;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.host-circle-icon {
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.host-widget-outline-full-btn {
+  display: block;
+  text-align: center;
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  text-decoration: none;
+  margin-top: 6px;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.host-widget-outline-full-btn:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.host-widget-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.host-news-headline {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  line-height: 1.35;
+}
+
+.host-news-body {
+  font-size: 12.5px;
+  color: #4b5563;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.host-metrics-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.host-metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.host-metric-label {
+  color: #4b5563;
+}
+
+.host-metric-val {
+  font-weight: 700;
+  color: #111827;
+}
+
+/* Modal */
+.host-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.host-modal-content {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 440px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.host-modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.host-modal-text {
+  font-size: 13px;
+  color: #4b5563;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.host-modal-stars {
+  display: flex;
+  gap: 6px;
+}
+
+.host-star-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #f59e0b;
+  cursor: pointer;
+  padding: 0;
+}
+
+.host-modal-textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #111827;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.host-modal-textarea:focus {
+  border-color: #0b6b5d;
+}
+
+.host-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* =========================================================================
+   EARNINGS PAGE STYLES
+   ========================================================================= */
+
+/* 4 KPI Stat Cards */
+.host-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.host-kpi-card {
+  background: #ffffff;
+  border: 1px solid #eaedf0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.host-kpi-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin: 0 0 6px 0;
+}
+
+.host-kpi-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+  letter-spacing: -0.4px;
+}
+
+.host-kpi-subtext {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+/* Two-Column Earnings Layout */
+.host-earnings-two-columns {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.host-earnings-left-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.host-earnings-right-col {
+  min-width: 0;
+}
+
+/* Monthly Payouts Bar Chart */
+.host-chart-card {
+  background: #ffffff;
+  border: 1px solid #eaedf0;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.host-card-header-simple {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.host-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.host-card-eyebrow-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.host-chart-body {
+  position: relative;
+}
+
+.host-chart-canvas {
+  position: relative;
+  height: 180px;
+  padding-left: 44px;
+  padding-bottom: 24px;
+}
+
+.host-chart-y-axis {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 24px;
+  width: 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.host-chart-y-label {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1;
+}
+
+.host-chart-grid-lines {
+  position: absolute;
+  left: 44px;
+  right: 0;
+  top: 0;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.host-chart-grid-line {
+  border-top: 1px dashed #e5e7eb;
+  width: 100%;
+}
+
+.host-chart-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 100%;
+  position: relative;
+  z-index: 2;
+  gap: 8px;
+}
+
+.host-chart-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+  position: relative;
+}
+
+.host-chart-bar-value {
+  font-size: 10.5px;
+  color: #4b5563;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+
+.host-chart-bar-track {
+  width: 100%;
+  max-width: 32px;
+  height: calc(100% - 36px);
+  display: flex;
+  align-items: flex-end;
+  background-color: transparent;
+}
+
+.host-chart-bar-fill {
+  width: 100%;
+  background-color: #a7f3d0;
+  border-radius: 4px 4px 0 0;
+  transition: height 0.3s ease;
+}
+
+.host-chart-bar-fill.active {
+  background-color: #0b6b5d;
+}
+
+.host-chart-bar-month {
+  position: absolute;
+  bottom: -22px;
+  font-size: 11.5px;
+  color: #6b7280;
+}
+
+.host-chart-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #f3f4f6;
+  padding-top: 14px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+/* Upcoming and Held Card */
+.host-upcoming-held-card {
+  background: #ffffff;
+  border: 1px solid #eaedf0;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.host-upcoming-held-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.host-upcoming-held-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.host-upcoming-row-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.host-upcoming-guest-desc {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.host-upcoming-row-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.host-upcoming-amount {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* Bank Payout Destination Box */
+.host-payout-destination-box {
+  background-color: #f9fafb;
+  border: 1px solid #eaedf0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.host-payout-dest-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.host-payout-dest-icon {
+  color: #0b6b5d;
+  flex-shrink: 0;
+}
+
+.host-payout-dest-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.host-payout-dest-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.3;
+}
+
+.host-payout-dest-sub {
+  font-size: 11.5px;
+  color: #6b7280;
+}
+
+/* Transactions Card & Table */
+.host-transactions-card {
+  background: #ffffff;
+  border: 1px solid #eaedf0;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.host-transactions-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.host-transactions-subnote {
+  font-size: 11.5px;
+  color: #6b7280;
+}
+
+.host-transactions-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.host-transactions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.host-transactions-table th {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #eaedf0;
+  text-align: left;
+}
+
+.host-transactions-table th.text-right,
+.host-transactions-table td.text-right {
+  text-align: right;
+}
+
+.host-transactions-table th.text-center,
+.host-transactions-table td.text-center {
+  text-align: center;
+}
+
+.host-transactions-table td {
+  padding: 12px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  color: #111827;
+  vertical-align: middle;
+}
+
+.host-transactions-table tr:hover td {
+  background-color: #fafafa;
+}
+
+.host-tx-guest-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.host-tx-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: #dbeafe;
+  color: #1e3a8a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.host-tx-guest-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.host-tx-guest-name {
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.25;
+}
+
+.host-tx-res-code a {
+  font-size: 11px;
+  color: #6b7280;
+  text-decoration: none;
+}
+
+.host-tx-res-code a:hover {
+  text-decoration: underline;
+}
+
+.host-tx-listing-name {
+  color: #4b5563;
+  font-size: 12.5px;
+}
+
+.host-tx-dates {
+  color: #4b5563;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.host-tx-number {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.host-tx-number.font-medium {
+  font-weight: 600;
+}
+
+.host-fee-sign {
+  color: #6b7280;
+  margin-right: 2px;
+}
+
+/* Status Badges */
+.host-status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.host-status-badge--paid {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.host-status-badge--held {
+  background-color: #fef9c3;
+  color: #854d0e;
+}
+
+.host-status-badge--scheduled {
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
+
+.host-status-badge--checkedin {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.host-status-badge--confirmed {
+  background-color: #ecfdf5;
+  color: #047857;
+}
+
+.host-transactions-footer {
+  padding-top: 8px;
+  font-size: 11.5px;
+  color: #6b7280;
+}
+
+/* --- Responsive Adjustments --- */
+@media (max-width: 1100px) {
+  .host-today-two-columns,
+  .host-earnings-two-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .host-today-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .host-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .host-today-cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .host-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .host-page-top-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .host-page-top-actions {
+    justify-content: flex-start;
+  }
+}

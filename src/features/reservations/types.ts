@@ -134,6 +134,7 @@ export interface Earnings {
         listing_title: string;
         check_in: string;
         check_out: string;
+        guest_name?: string;
       }[]
     | null;
 }
