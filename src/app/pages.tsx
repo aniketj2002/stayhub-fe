@@ -8,6 +8,7 @@ import { searchListings } from '../features/listings/api';
 import { CategoryBar } from '../features/search/CategoryBar';
 import { ListingCardGrid } from '../features/search/ListingCardGrid';
 import { SearchForm } from '../features/search/SearchForm';
+import { addDays } from '../features/calendar/dates';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -29,11 +30,16 @@ export function HomePage() {
   const guestFavorites = lisbonQuery.data?.listings || [];
   const trendingStays = trendingQuery.data?.listings || [];
 
+  const today = new Date();
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const checkInDefault = todayIso;
+  const checkOutDefault = addDays(todayIso, 3);
+
   const defaultParams = new URLSearchParams({
     city: 'Lisbon',
     country: 'PT',
-    check_in: '2026-10-03',
-    check_out: '2026-10-08',
+    check_in: checkInDefault,
+    check_out: checkOutDefault,
     guests: '2',
   });
 

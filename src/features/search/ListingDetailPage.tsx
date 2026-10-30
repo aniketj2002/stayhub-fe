@@ -98,18 +98,21 @@ export function ListingDetailPage() {
 
 function ListingDetail({ listing }: { listing: PublicListing }) {
   const [params, setParams] = useSearchParams();
-  const checkIn = params.get('check_in') || '';
-  const checkOut = params.get('check_out') || '';
+  const today = new Date();
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const defaultCheckIn = todayIso;
+  const defaultCheckOut = addDays(todayIso, 3);
+
+  const checkIn = params.has('check_in') ? params.get('check_in')! : defaultCheckIn;
+  const checkOut = params.has('check_out') ? params.get('check_out')! : defaultCheckOut;
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showMoreDesc, setShowMoreDesc] = useState(false);
 
   function handleUpdateDates(nextIn: string, nextOut: string) {
     const next = new URLSearchParams(params);
-    if (nextIn) next.set('check_in', nextIn);
-    else next.delete('check_in');
-    if (nextOut) next.set('check_out', nextOut);
-    else next.delete('check_out');
+    next.set('check_in', nextIn);
+    next.set('check_out', nextOut);
     setParams(next, { replace: true });
   }
 
@@ -1293,8 +1296,9 @@ function AvailabilityCalendar({
   const today = new Date();
   const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-  // Default view to checkIn's month, or 2026-10-01 to match reference mock
-  const defaultMonth = checkIn && checkIn.length >= 7 ? `${checkIn.slice(0, 7)}-01` : '2026-10-01';
+  // Default view to checkIn's month, or current month
+  const defaultMonth =
+    checkIn && checkIn.length >= 7 ? `${checkIn.slice(0, 7)}-01` : `${todayString.slice(0, 7)}-01`;
   const [navMonth, setNavMonth] = useState<string | null>(null);
   const viewMonth = navMonth ?? defaultMonth;
 
