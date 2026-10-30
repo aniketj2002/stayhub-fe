@@ -8,7 +8,6 @@ import { searchListings } from '../features/listings/api';
 import { CategoryBar } from '../features/search/CategoryBar';
 import { ListingCardGrid } from '../features/search/ListingCardGrid';
 import { SearchForm } from '../features/search/SearchForm';
-import { addDays } from '../features/calendar/dates';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -30,17 +29,10 @@ export function HomePage() {
   const guestFavorites = lisbonQuery.data?.listings || [];
   const trendingStays = trendingQuery.data?.listings || [];
 
-  const today = new Date();
-  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const checkInDefault = todayIso;
-  const checkOutDefault = addDays(todayIso, 3);
-
   const defaultParams = new URLSearchParams({
     city: 'Lisbon',
     country: 'PT',
-    check_in: checkInDefault,
-    check_out: checkOutDefault,
-    guests: '2',
+    guests: '1',
   });
 
   return (
@@ -48,16 +40,20 @@ export function HomePage() {
       {/* Hero Section (Screen 01) */}
       <section className="explore-hero">
         <div className="explore-hero-content">
-          <h1 className="explore-hero-title">Find a place to stay</h1>
-          <p className="explore-hero-subtitle">
-            Homes, experiences, and services in 260 cities, chosen by the people who live there.
-          </p>
+          <div className="explore-hero-text">
+            <h1 className="explore-hero-title">Find a place to stay</h1>
+            <p className="explore-hero-subtitle">
+              Homes, experiences, and services in 260 cities, chosen by the people who live there.
+            </p>
+          </div>
 
-          <SearchForm
-            params={defaultParams}
-            onSearch={(next) => navigate(`/search?${next.toString()}`)}
-            variant="hero"
-          />
+          <div className="explore-hero-filter">
+            <SearchForm
+              params={defaultParams}
+              onSearch={(next) => navigate(`/search?${next.toString()}`)}
+              variant="hero"
+            />
+          </div>
         </div>
       </section>
 
@@ -151,6 +147,8 @@ export function HomePage() {
           </EmptyState>
         )}
       </section>
+
+      <hr className="explore-section-divider" />
 
       <div className="foundation-status">
         <span>Building a thoughtful way to stay.</span>

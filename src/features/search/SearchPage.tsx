@@ -30,6 +30,8 @@ export function SearchPage() {
   const [sortBy, setSortBy] = useState('recommended');
   const [hoveredListingId, setHoveredListingId] = useState<string | null>(null);
   const [isEditingSearch, setIsEditingSearch] = useState(false);
+  const [searchAsMove, setSearchAsMove] = useState(true);
+  const [zoom, setZoom] = useState(1);
 
   const query = useQuery({
     queryKey: ['search', key],
@@ -48,14 +50,15 @@ export function SearchPage() {
   const listingsToRender: SearchCard[] = query.data?.listings || [];
   const totalCount = query.data?.count ?? listingsToRender.length;
 
-  const cityParam = params.get('city') || 'Anywhere';
+  const cityParam = params.get('city') || 'Lisbon';
   const checkInParam = params.get('check_in') || '';
   const checkOutParam = params.get('check_out') || '';
   const guestsParam = params.get('guests') || '1';
 
   // Format short date string e.g. "Oct 3 – 8"
   function formatDateRangeShort(startStr: string, endStr: string) {
-    if (!startStr && !endStr) return 'Any week';
+    if (!startStr && !endStr) return 'Add dates';
+    if (startStr && !endStr) return startStr;
     try {
       const s = new Date(startStr);
       const e = new Date(endStr);
@@ -82,15 +85,15 @@ export function SearchPage() {
     } catch {
       // Fallback for unparseable date strings
     }
-    return startStr || endStr || 'Any week';
+    return startStr || endStr || 'Add dates';
   }
 
   return (
     <div
       className={`results-page-wrapper ${viewMode === 'map' ? 'results-page-wrapper--fullmap' : ''}`}
     >
-      {/* Search Bar / Panel */}
-      <div className="search-bar-shell">
+      {/* Search Bar / Panel - collapsed by default per reference image */}
+      <div className={`search-bar-shell ${!isEditingSearch ? 'search-bar-shell--collapsed' : ''}`}>
         <SearchForm
           key={params.toString()}
           params={params}
@@ -102,38 +105,36 @@ export function SearchPage() {
         />
       </div>
 
-      {/* Sub-nav Filter Bar (Matches Screen 03 & 04) */}
+      {/* Sub-nav Filter Bar (Matches Reference Images) */}
       <div className="results-filter-bar">
         <div className="filter-summary-pills">
           <button
             type="button"
-            className="filter-pill"
+            className="filter-rect-btn filter-pill"
             onClick={() => setIsEditingSearch(!isEditingSearch)}
           >
-            <span>{cityParam}</span>
+            {cityParam}
           </button>
 
           <button
             type="button"
-            className="filter-pill"
+            className="filter-rect-btn filter-pill"
             onClick={() => setIsEditingSearch(!isEditingSearch)}
           >
-            <span>{formatDateRangeShort(checkInParam, checkOutParam)}</span>
+            {formatDateRangeShort(checkInParam, checkOutParam)}
           </button>
 
           <button
             type="button"
-            className="filter-pill"
+            className="filter-rect-btn filter-pill"
             onClick={() => setIsEditingSearch(!isEditingSearch)}
           >
-            <span>
-              {guestsParam} {Number(guestsParam) === 1 ? 'guest' : 'guests'}
-            </span>
+            {guestsParam} {Number(guestsParam) === 1 ? 'guest' : 'guests'}
           </button>
 
           <button
             type="button"
-            className="filter-pill filter-pill--with-badge"
+            className="filter-rect-btn filter-rect-btn--filters filter-btn-with-badge"
             onClick={() => setFiltersOpen(true)}
           >
             <svg
@@ -143,19 +144,32 @@ export function SearchPage() {
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
             >
-              <line x1="4" y1="21" x2="4" y2="14" />
-              <line x1="4" y1="10" x2="4" y2="3" />
-              <line x1="12" y1="21" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12" y2="3" />
-              <line x1="20" y1="21" x2="20" y2="16" />
-              <line x1="20" y1="12" x2="20" y2="3" />
-              <line x1="1" y1="14" x2="7" y2="14" />
-              <line x1="9" y1="8" x2="15" y2="8" />
-              <line x1="17" y1="16" x2="23" y2="16" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+              <circle cx="8" cy="6" r="2" fill="currentColor" />
+              <circle cx="16" cy="12" r="2" fill="currentColor" />
+              <circle cx="10" cy="18" r="2" fill="currentColor" />
             </svg>
-            <span>Filters</span>
+            <span>Filters · 7</span>
           </button>
+
+          {/* Search as I move the map toggle: in Full Map View it appears in the filter bar (Image 1) */}
+          {viewMode === 'map' && (
+            <label className="map-subnav-move-toggle">
+              <input
+                type="checkbox"
+                checked={searchAsMove}
+                onChange={(e) => setSearchAsMove(e.target.checked)}
+              />
+              <span className="checkbox-custom-mark">✓</span>
+              <span>Search as I move the map</span>
+            </label>
+          )}
 
           <label className="results-tax-toggle">
             <button
@@ -173,21 +187,25 @@ export function SearchPage() {
 
         {/* Right side: Count & View Switcher */}
         <div className="filter-bar-right">
-          <span className="results-count-text">
-            {totalCount} {totalCount === 1 ? 'stay' : 'stays'} · sorted by
-          </span>
+          {viewMode === 'list' && (
+            <>
+              <span className="results-count-text">
+                {totalCount} {totalCount === 1 ? 'stay' : 'stays'} · sorted by
+              </span>
 
-          <select
-            className="sort-dropdown"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            aria-label="Sort stays by"
-          >
-            <option value="recommended">Recommended</option>
-            <option value="price_low">Price: Low to High</option>
-            <option value="price_high">Price: High to Low</option>
-            <option value="rating">Highest Rated</option>
-          </select>
+              <select
+                className="sort-dropdown"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                aria-label="Sort stays by"
+              >
+                <option value="recommended">Recommended</option>
+                <option value="price_low">Price: Low to High</option>
+                <option value="price_high">Price: High to Low</option>
+                <option value="rating">Highest Rated</option>
+              </select>
+            </>
+          )}
 
           <div className="view-mode-toggle" role="tablist" aria-label="View mode">
             <button
@@ -237,6 +255,28 @@ export function SearchPage() {
               </svg>
             </button>
           </div>
+
+          {/* Zoom controls on right of filter bar in full map view (Image 1) */}
+          {viewMode === 'map' && (
+            <div className="subnav-zoom-controls">
+              <button
+                type="button"
+                className="zoom-btn"
+                onClick={() => setZoom((z) => Math.min(z + 0.2, 1.8))}
+                aria-label="Zoom in"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                className="zoom-btn"
+                onClick={() => setZoom((z) => Math.max(z - 0.2, 0.8))}
+                aria-label="Zoom out"
+              >
+                −
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -261,6 +301,10 @@ export function SearchPage() {
           onSelectListing={(id) => setHoveredListingId(id)}
           isFullView
           paramsString={params.toString()}
+          searchAsMove={searchAsMove}
+          onSearchAsMoveChange={setSearchAsMove}
+          onSwitchToList={() => setViewMode('list')}
+          zoom={zoom}
         />
       ) : (
         /* Split List + Map View (Screen 03) */
@@ -323,6 +367,10 @@ export function SearchPage() {
               selectedListingId={hoveredListingId}
               onSelectListing={(id) => setHoveredListingId(id)}
               paramsString={params.toString()}
+              searchAsMove={searchAsMove}
+              onSearchAsMoveChange={setSearchAsMove}
+              onSwitchToList={() => setViewMode('list')}
+              zoom={zoom}
             />
           </div>
         </div>

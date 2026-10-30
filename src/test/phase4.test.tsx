@@ -142,6 +142,31 @@ describe('Phase 4 financial and lifecycle flows', () => {
     expect(fetchMock.mock.calls.some(([url]) => url === '/api/v1/reservations')).toBe(false);
   });
 
+  it('requires reviewing cancellation policy and terms before continuing through checkout', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/quote')) return json({ quote: quote() });
+      return json({ listing: publicDetail });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    mount(<CheckoutPage />, bookingPath);
+
+    const continueBtn = await screen.findByRole('button', { name: 'Continue to identity check' });
+    const agreementCheckbox = screen.getByLabelText(/I’ve reviewed the price, house rules, and cancellation policy/i) as HTMLInputElement;
+
+    expect(agreementCheckbox.checked).toBe(false);
+    expect(continueBtn.matches(':disabled')).toBe(true);
+
+    // Clicking agreement enables continue
+    fireEvent.click(agreementCheckbox);
+    expect(agreementCheckbox.checked).toBe(true);
+    expect(continueBtn.matches(':disabled')).toBe(false);
+
+    // Unchecking disables continue again
+    fireEvent.click(agreementCheckbox);
+    expect(agreementCheckbox.checked).toBe(false);
+    expect(continueBtn.matches(':disabled')).toBe(true);
+  });
+
   it('refreshes a stale refund preview, requires reconfirmation, then records cancellation', async () => {
     let previews = 0;
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {

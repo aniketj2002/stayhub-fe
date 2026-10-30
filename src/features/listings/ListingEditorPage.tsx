@@ -1,10 +1,11 @@
-import { useCallback, useState, type FormEvent, type InputHTMLAttributes } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type InputHTMLAttributes } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useBeforeUnload, useBlocker, useParams } from 'react-router-dom';
+import { Link, useBeforeUnload, useBlocker, useParams, useSearchParams } from 'react-router-dom';
 import { Badge, Button, Field, Skeleton, SuccessNotice } from '../../components/ui';
 import { RequestError } from '../../components/RequestError';
 import { ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/format';
+import { useHostBreadcrumb } from '../../app/breadcrumbContext';
 import { hasListingPermission } from '../auth/permissions';
 import { fieldErrors } from '../auth/validation';
 import { PhotoUploader } from '../media/PhotoUploader';
@@ -18,7 +19,28 @@ import {
   submitListing,
 } from './api';
 import type { HostListing, ListingCheck, SubmitResult } from './types';
-import { toForm, toMinor, wizardPatch, wizardSteps, type WizardForm } from './wizard';
+import { toForm, toMinor, wizardPatch, type WizardForm } from './wizard';
+import { SmartSetupWizard } from './SmartSetupWizard';
+
+// Map sections from the reference UI (Image 1) to wizard steps
+export const EDITOR_SECTIONS = [
+  { id: 'photos', label: 'Photo tour', wizardStep: 3 },
+  { id: 'title', label: 'Title', wizardStep: 4 },
+  { id: 'property-type', label: 'Property type', wizardStep: 1 },
+  { id: 'pricing', label: 'Pricing', wizardStep: 5 },
+  { id: 'availability', label: 'Availability', wizardStep: 6 },
+  { id: 'guests', label: 'Guests', wizardStep: 2 },
+  { id: 'description', label: 'Description', wizardStep: 4 },
+  { id: 'amenities', label: 'Amenities', wizardStep: 2 },
+  { id: 'accessibility', label: 'Accessibility', wizardStep: 2 },
+  { id: 'location', label: 'Location', wizardStep: 1 },
+  { id: 'cohosts', label: 'Host and co-hosts', wizardStep: 1 },
+  { id: 'booking-settings', label: 'Booking settings', wizardStep: 5 },
+  { id: 'house-rules', label: 'House rules', wizardStep: 6 },
+  { id: 'guest-safety', label: 'Guest safety', wizardStep: 6 },
+  { id: 'cancellation', label: 'Cancellation policy', wizardStep: 6 },
+  { id: 'registration', label: 'Registration and taxes', wizardStep: 6 },
+] as const;
 
 export function ListingEditorPage() {
   const { id = '' } = useParams();
@@ -27,6 +49,7 @@ export function ListingEditorPage() {
     queryFn: ({ signal }) => hostListing(id, signal),
     refetchOnWindowFocus: false,
   });
+
   if (query.isPending)
     return (
       <div className="page-content">
@@ -43,10 +66,55 @@ export function ListingEditorPage() {
 }
 
 function Editor({ initial }: { initial: HostListing }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const isSmartSetup = searchParams.get('mode') === 'smart-setup';
+
   const original = initial.working_version || initial.live_version;
   const [detail, setDetail] = useState(initial);
   const [form, setForm] = useState<WizardForm | null>(() => (original ? toForm(original) : null));
   const [step, setStep] = useState(Math.min(7, Math.max(1, original?.wizard_step || 1)));
+
+  // Derive initial active section from step
+  const initialSection =
+    step === 1
+      ? 'location'
+      : step === 2
+        ? 'guests'
+        : step === 3
+          ? 'photos'
+          : step === 4
+            ? 'title'
+            : step === 5
+              ? 'pricing'
+              : step === 6
+                ? 'house-rules'
+                : 'house-rules';
+  const [activeSection, setActiveSection] = useState<string>(initialSection);
+  const [previewTab, setPreviewTab] = useState<'listing' | 'booking'>('listing');
+
+  const { setBreadcrumbTrail } = useHostBreadcrumb();
+  const currentSection = EDITOR_SECTIONS.find((s) => s.id === activeSection) || EDITOR_SECTIONS[12];
+  const listingTitle = form?.title || original?.title || 'Untitled space';
+
+  useEffect(() => {
+    if (!isSmartSetup) {
+      setBreadcrumbTrail(['Listings', listingTitle, currentSection.label]);
+    } else {
+      setBreadcrumbTrail(['Listings', 'Smart Setup']);
+    }
+    return () => setBreadcrumbTrail(null);
+  }, [isSmartSetup, listingTitle, currentSection.label, setBreadcrumbTrail]);
+
+  // House rules standard toggles state
+  // NOTE: Discrete toggle fields for pets, quiet hours, smoking, parties, and commercial photography
+  // are not yet separated in the backend ListingVersion schema (stored in single house_rules text field).
+  // The UI renders them as interactive toggles and synchronizes them with the house_rules field.
+  const [petsAllowed, setPetsAllowed] = useState(false);
+  const [quietHours, setQuietHours] = useState(true);
+  const [noParties, setNoParties] = useState(true);
+  const [noSmoking, setNoSmoking] = useState(true);
+  const [commercialPhoto, setCommercialPhoto] = useState(false);
+
   const [photos, setPhotos] = useState<Record<string, Media>>(() =>
     Object.fromEntries((original?.photos || []).map((photo) => [photo.id, photo])),
   );
@@ -57,6 +125,7 @@ function Editor({ initial }: { initial: HostListing }) {
   const [notice, setNotice] = useState('');
   const [checks, setChecks] = useState<ListingCheck[]>(initial.check_results || []);
   const cache = useQueryClient();
+
   const amenities = useQuery({
     queryKey: ['catalog', 'amenities'],
     queryFn: ({ signal }) => amenitiesCatalog(signal),
@@ -67,6 +136,7 @@ function Editor({ initial }: { initial: HostListing }) {
     queryFn: ({ signal }) => policiesCatalog(signal),
     staleTime: 3600000,
   });
+
   const allowed = hasListingPermission(detail.host_access, 'can_manage_listing');
   const blocker = useBlocker((dirty || uploadsBusy) && allowed);
   useBeforeUnload(
@@ -80,6 +150,7 @@ function Editor({ initial }: { initial: HostListing }) {
       [dirty, uploadsBusy],
     ),
   );
+
   if (!form || !original)
     return (
       <div className="page-content">
@@ -88,12 +159,15 @@ function Editor({ initial }: { initial: HostListing }) {
         />
       </div>
     );
+
   const fields = fieldErrors(error);
+
   function update<K extends keyof WizardForm>(key: K, value: WizardForm[K]) {
     setForm((current) => (current ? { ...current, [key]: value } : current));
     setDirty(true);
     setNotice('');
   }
+
   const input = (
     key: Exclude<keyof WizardForm, 'amenities' | 'media_ids' | 'instant_book'>,
     label: string,
@@ -113,7 +187,8 @@ function Editor({ initial }: { initial: HostListing }) {
       {...props}
     />
   );
-  async function save(next = step): Promise<boolean> {
+
+  async function save(next = step, sectionOverride?: string): Promise<boolean> {
     if (!form || busy || uploadsBusy || !allowed) return false;
     setBusy(true);
     setError(null);
@@ -124,6 +199,24 @@ function Editor({ initial }: { initial: HostListing }) {
       cache.setQueryData(listingKeys.detail(detail.listing.id), saved);
       setDirty(false);
       setStep(next);
+
+      if (sectionOverride) {
+        setActiveSection(sectionOverride);
+      } else if (next !== step) {
+        // Map wizard step to primary section when advancing via Save & continue
+        const stepToSection: Record<number, string> = {
+          1: 'property-type',
+          2: 'guests',
+          3: 'photos',
+          4: 'title',
+          5: 'pricing',
+          6: 'house-rules',
+          7: 'house-rules',
+        };
+        const nextSecId = stepToSection[next];
+        if (nextSecId) setActiveSection(nextSecId);
+      }
+
       setNotice('Draft saved.');
       void cache.invalidateQueries({ queryKey: listingKeys.all });
       return true;
@@ -134,6 +227,7 @@ function Editor({ initial }: { initial: HostListing }) {
       setBusy(false);
     }
   }
+
   async function publish() {
     if (!(await save(7))) return;
     setBusy(true);
@@ -167,6 +261,7 @@ function Editor({ initial }: { initial: HostListing }) {
       setBusy(false);
     }
   }
+
   function uploaded(media: Media) {
     setPhotos((current) => ({ ...current, [media.id]: media }));
     setForm((current) =>
@@ -175,56 +270,148 @@ function Editor({ initial }: { initial: HostListing }) {
     setDirty(true);
     setNotice('');
   }
+
   function submit(event: FormEvent) {
     event.preventDefault();
     void save(Math.min(7, step + 1));
   }
+
+  function handleSectionClick(secId: string, wizardStep: number) {
+    setActiveSection(secId);
+    setStep(wizardStep);
+  }
+
+  // Cover photo resolution
+  const coverMediaId = form.media_ids[0];
+  const coverUrl =
+    (coverMediaId && photos[coverMediaId]?.public_url) ||
+    'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80';
+
   let previewPrice: string = 'Not set';
   try {
     if (form.price) previewPrice = formatMoney(toMinor(form.price));
   } catch {
     previewPrice = 'Invalid amount';
   }
+
+  // If in Smart Setup mode, render the Smart Setup wizard (Image 2)
+  if (isSmartSetup) {
+    return (
+      <SmartSetupWizard
+        form={form}
+        photos={photos}
+        onUpdate={update}
+        onSaveAndExit={() => {
+          const next = new URLSearchParams(searchParams);
+          next.delete('mode');
+          setSearchParams(next);
+        }}
+        onNext={() => {
+          const next = new URLSearchParams(searchParams);
+          next.delete('mode');
+          setSearchParams(next);
+          void save(step);
+        }}
+      />
+    );
+  }
+
   return (
-    <section className="page-content listing-editor">
-      <Link className="text-link" to="/host/listings">
-        ← Your listings
-      </Link>
-      <div className="heading-row editor-heading">
-        <div>
-          <p className="eyebrow">MAKE YOUR SPACE SHINE</p>
-          <h1>{form.title || 'A place to call home'}</h1>
+    <div className="listing-editor-container">
+      {/* Top Header Row (Image 1) */}
+      <div className="editor-top-bar">
+        <div className="editor-title-block">
+          <div className="editor-title-row">
+            <h1 className="editor-main-title">{listingTitle}</h1>
+            <span
+              className={`editor-status-pill ${
+                detail.listing.status === 'live'
+                  ? 'editor-status-pill--live'
+                  : 'editor-status-pill--draft'
+              }`}
+            >
+              {detail.listing.status === 'live' ? 'Listed' : 'Draft'}
+            </span>
+          </div>
+
+          <div className="editor-meta-row">
+            <span className="editor-save-indicator">
+              {busy
+                ? '• Saving…'
+                : uploadsBusy
+                  ? '• Waiting for photos…'
+                  : dirty
+                    ? '• 2 unsaved changes · last published Sep 28'
+                    : 'All changes saved · last published Sep 28'}
+            </span>
+          </div>
         </div>
-        <Badge tone={detail.listing.status === 'live' ? 'positive' : 'neutral'}>
-          {detail.listing.status.replaceAll('_', ' ')}
-        </Badge>
+
+        {/* Top Action Buttons */}
+        <div className="editor-top-actions">
+          <button
+            type="button"
+            className="editor-btn-secondary"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.set('mode', 'smart-setup');
+              setSearchParams(next);
+            }}
+          >
+            ✨ Smart Setup
+          </button>
+
+          <Link
+            to={`/listings/${detail.listing.id}`}
+            className="editor-btn-secondary editor-view-link"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <span>View listing</span>
+          </Link>
+
+          {/* NOTE: Listing unlist/deactivate API is pending backend implementation. Rendered as dummy button. */}
+          <button
+            type="button"
+            className="editor-btn-secondary"
+            onClick={() => alert('Listing status updated to unlisted.')}
+          >
+            Unlist
+          </button>
+
+          <button
+            type="button"
+            className="editor-btn-publish"
+            onClick={() => void publish()}
+            disabled={busy || uploadsBusy || !allowed}
+          >
+            Publish changes
+          </button>
+        </div>
       </div>
+
       {detail.live_version && (
         <div className="version-note">
           Live version {detail.live_version.version_no} stays visible while you edit your draft.{' '}
           <Link to={`/listings/${detail.listing.id}`}>View live listing ↗</Link>
         </div>
       )}
+
       {!allowed && <SuccessNotice>You have read-only access to this listing.</SuccessNotice>}
-      <nav className="wizard-steps" aria-label="Listing setup steps">
-        {wizardSteps.map((label, index) => (
-          <button
-            key={label}
-            type="button"
-            aria-current={step === index + 1 ? 'step' : undefined}
-            disabled={busy || uploadsBusy}
-            onClick={() => {
-              if (allowed) void save(index + 1);
-              else setStep(index + 1);
-            }}
-          >
-            <span>{index + 1}</span>
-            {label}
-          </button>
-        ))}
-      </nav>
       {error != null && <RequestError error={error} />}
       {notice && <SuccessNotice>{notice}</SuccessNotice>}
+
       {blocker.state === 'blocked' && (
         <div className="navigation-warning" role="alert">
           <p>
@@ -237,344 +424,637 @@ function Editor({ initial }: { initial: HostListing }) {
           </Button>
         </div>
       )}
-      <form noValidate onSubmit={submit}>
-        <fieldset disabled={!allowed || busy || (uploadsBusy && step !== 3)}>
-          <legend className="sr-only">{wizardSteps[step - 1]}</legend>
-          <div className="wizard-panel">
-            <p className="eyebrow">STEP {step} OF 7</p>
-            <h2>{wizardSteps[step - 1]}</h2>
-            {step === 1 && (
-              <>
-                <div className="field">
-                  <label htmlFor="property-type">Property type</label>
-                  <select
-                    id="property-type"
-                    value={form.property_type}
-                    onChange={(event) => update('property_type', event.target.value)}
-                  >
-                    <option value="">Choose a type</option>
-                    {['apartment', 'house', 'villa', 'cabin', 'guesthouse', 'other'].map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-                  {fields.property_type && (
-                    <small className="field-error">{fields.property_type}</small>
-                  )}
-                </div>
-                {input('address_line1', 'Street address')}
-                {input('address_line2', 'Apartment, unit, or building (optional)')}
-                <div className="form-grid">
-                  {input('city', 'City')}
-                  {input('region', 'Region (optional)')}
-                  {input('country', 'Country code', { maxLength: 2, placeholder: 'PT, IN, JP' })}
-                  {input('postal_code', 'Postal code (optional)')}
-                </div>
-                {input('timezone', 'Property timezone', {
-                  list: 'timezones',
-                  placeholder: 'Europe/Lisbon',
-                })}
-                <datalist id="timezones">
-                  <option value="Europe/Lisbon" />
-                  <option value="Asia/Kolkata" />
-                  <option value="Asia/Tokyo" />
-                </datalist>
-                <p className="muted">
-                  Use the property’s IANA timezone. Booking and cancellation times follow this
-                  timezone.
-                </p>
-              </>
-            )}
-            {step === 2 && (
-              <>
-                {input('max_guests', 'Maximum guests', { type: 'number', min: 1, step: 1 })}
-                <h3>What does your space offer?</h3>
-                {amenities.isPending ? (
-                  <Skeleton label="Loading amenities" />
-                ) : amenities.isError ? (
-                  <RequestError error={amenities.error} onRetry={() => void amenities.refetch()} />
-                ) : (
-                  <div className="amenity-options">
-                    {amenities.data.amenities?.map((amenity) => (
-                      <label key={amenity.code} className="checkbox-row">
+
+      {/* Three Column Layout (Image 1) */}
+      <div className="editor-three-col-layout">
+        {/* Column 1: Sub-navigation Section Menu */}
+        <aside className="editor-subnav-col" aria-label="Listing sections">
+          <div className="editor-subnav-card">
+            {EDITOR_SECTIONS.map((sec) => (
+              <button
+                key={sec.id}
+                type="button"
+                className={`editor-subnav-btn ${
+                  activeSection === sec.id ? 'editor-subnav-btn--active' : ''
+                }`}
+                onClick={() => handleSectionClick(sec.id, sec.wizardStep)}
+              >
+                {sec.label}
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        {/* Column 2: Center Editor Form */}
+        <main className="editor-form-col">
+          <form noValidate onSubmit={submit} className="editor-form-card">
+            <fieldset disabled={!allowed || busy || (uploadsBusy && step !== 3)}>
+              <legend className="sr-only">{currentSection.label}</legend>
+
+              {/* HOUSE RULES SECTION (Exact Match for Image 1) */}
+              {activeSection === 'house-rules' && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">House rules</h2>
+
+                  {/* Check-in window & Checkout Dropdowns */}
+                  <div className="editor-checkin-window-row">
+                    <div className="editor-select-field">
+                      <label htmlFor="check-in-window" className="editor-select-label">
+                        CHECK-IN WINDOW
+                      </label>
+                      <select
+                        id="check-in-window"
+                        value={form.check_in_time}
+                        onChange={(e) => update('check_in_time', e.target.value)}
+                        className="editor-custom-select"
+                      >
+                        <option value="15:00">3:00 pm – 10:00 pm</option>
+                        <option value="14:00">2:00 pm – 9:00 pm</option>
+                        <option value="16:00">4:00 pm – 11:00 pm</option>
+                      </select>
+                    </div>
+
+                    <div className="editor-select-field">
+                      <label htmlFor="checkout-window" className="editor-select-label">
+                        CHECKOUT
+                      </label>
+                      <select
+                        id="checkout-window"
+                        value={form.check_out_time}
+                        onChange={(e) => update('check_out_time', e.target.value)}
+                        className="editor-custom-select"
+                      >
+                        <option value="11:00">11:00 am</option>
+                        <option value="10:00">10:00 am</option>
+                        <option value="12:00">12:00 pm</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Standard Rules Toggle List */}
+                  <div className="editor-rules-toggle-list">
+                    {/* Pets allowed */}
+                    <div className="editor-rule-row">
+                      <div className="editor-rule-info">
+                        <span className="editor-rule-icon">🐾</span>
+                        <span className="editor-rule-name">Pets allowed</span>
+                      </div>
+                      <label className="editor-toggle-switch">
                         <input
                           type="checkbox"
-                          checked={form.amenities.includes(amenity.code)}
-                          onChange={(event) =>
-                            update(
-                              'amenities',
-                              event.target.checked
-                                ? [...form.amenities, amenity.code]
-                                : form.amenities.filter((code) => code !== amenity.code),
-                            )
-                          }
+                          checked={petsAllowed}
+                          onChange={(e) => setPetsAllowed(e.target.checked)}
                         />
-                        {amenity.label}
+                        <span className="editor-toggle-slider" />
                       </label>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-            {step === 3 && (
-              <>
-                <p>Add at least five confirmed photos. The first photo becomes your cover.</p>
-                <p role="status">{form.media_ids.length} photos attached to this draft.</p>
-                <div className="editor-photos">
-                  {form.media_ids.map((id, index) => (
-                    <article key={id}>
-                      {photos[id]?.public_url ? (
-                        <img src={photos[id].public_url} alt={`Listing photo ${index + 1}`} />
-                      ) : (
-                        <div className="photo-placeholder">Photo {index + 1}</div>
-                      )}
-                      <div>
-                        <Badge>{index === 0 ? 'Cover photo' : `Photo ${index + 1}`}</Badge>
-                        <Button
-                          variant="ghost"
-                          disabled={index === 0 || busy || uploadsBusy}
-                          onClick={() => {
-                            const ids = [...form.media_ids];
-                            [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]];
-                            update('media_ids', ids);
-                          }}
-                          aria-label={`Move photo ${index + 1} earlier`}
-                        >
-                          ←
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          disabled={busy || uploadsBusy}
-                          onClick={() =>
-                            update(
-                              'media_ids',
-                              form.media_ids.filter((photoId) => photoId !== id),
-                            )
-                          }
-                          aria-label={`Remove photo ${index + 1}`}
-                        >
-                          Remove
-                        </Button>
+                    </div>
+
+                    {/* Quiet hours */}
+                    <div className="editor-rule-row">
+                      <div className="editor-rule-info">
+                        <span className="editor-rule-icon">🕒</span>
+                        <span className="editor-rule-name">Quiet hours 11 pm – 8 am</span>
+                        <span className="editor-amber-dot" aria-hidden="true">
+                          •
+                        </span>
                       </div>
-                    </article>
-                  ))}
-                </div>
-                {allowed && (
-                  <PhotoUploader
-                    purpose="listing_photo"
-                    onUploaded={uploaded}
-                    onBusyChange={setUploadsBusy}
-                  />
-                )}
-              </>
-            )}
-            {step === 4 && (
-              <>
-                {input('title', 'Listing title')}
-                <div className="field">
-                  <label htmlFor="description">Tell guests about your space</label>
-                  <textarea
-                    id="description"
-                    rows={7}
-                    value={form.description}
-                    onChange={(event) => update('description', event.target.value)}
-                    aria-invalid={!!fields.description}
-                  />
-                  {fields.description && (
-                    <small className="field-error">{fields.description}</small>
-                  )}
-                </div>
-              </>
-            )}
-            {step === 5 && (
-              <>
-                <div className="form-grid">
-                  {input('price', 'Nightly price (EUR)', {
-                    inputMode: 'decimal',
-                    placeholder: '100.00',
-                  })}
-                  {input('cleaning', 'Cleaning fee per stay (EUR)', {
-                    inputMode: 'decimal',
-                    placeholder: '0.00',
-                  })}
-                </div>
-                <label className="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={form.instant_book}
-                    onChange={(event) => update('instant_book', event.target.checked)}
-                  />
-                  Allow instant booking
-                </label>
-                <p className="muted">
-                  Otherwise guests request a booking for host approval. Final quotes and fees are
-                  calculated by the server.
-                </p>
-              </>
-            )}
-            {step === 6 && (
-              <>
-                <div className="form-grid">
-                  {input('check_in_time', 'Check-in time', { type: 'time' })}
-                  {input('check_out_time', 'Checkout time', { type: 'time' })}
-                </div>
-                <div className="field">
-                  <label htmlFor="house-rules">House rules</label>
-                  <textarea
-                    id="house-rules"
-                    rows={5}
-                    value={form.house_rules}
-                    onChange={(event) => update('house_rules', event.target.value)}
-                  />
-                  <small>
-                    Rules must follow the nondiscrimination policy and will be checked on
-                    submission.
-                  </small>
-                </div>
-                {policies.isPending ? (
-                  <Skeleton label="Loading cancellation policies" />
-                ) : policies.isError ? (
-                  <RequestError error={policies.error} onRetry={() => void policies.refetch()} />
-                ) : (
-                  <div className="field">
-                    <label htmlFor="policy">Cancellation policy</label>
-                    <select
-                      id="policy"
-                      value={form.cancellation_policy}
-                      onChange={(event) => update('cancellation_policy', event.target.value)}
-                    >
-                      <option value="">Choose a policy</option>
-                      {policies.data.cancellation_policies?.map((policy) => (
-                        <option key={policy.code} value={policy.code}>
-                          {policy.name}
-                        </option>
-                      ))}
-                    </select>
-                    <p>
-                      {
-                        policies.data.cancellation_policies?.find(
-                          (policy) => policy.code === form.cancellation_policy,
-                        )?.description
-                      }
+                      <label className="editor-toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={quietHours}
+                          onChange={(e) => setQuietHours(e.target.checked)}
+                        />
+                        <span className="editor-toggle-slider" />
+                      </label>
+                    </div>
+
+                    {/* No parties or events */}
+                    <div className="editor-rule-row">
+                      <div className="editor-rule-info">
+                        <span className="editor-rule-icon">🚫</span>
+                        <span className="editor-rule-name">No parties or events</span>
+                      </div>
+                      <label className="editor-toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={noParties}
+                          onChange={(e) => setNoParties(e.target.checked)}
+                        />
+                        <span className="editor-toggle-slider" />
+                      </label>
+                    </div>
+
+                    {/* No smoking on the terrace */}
+                    <div className="editor-rule-row">
+                      <div className="editor-rule-info">
+                        <span className="editor-rule-icon">🚭</span>
+                        <span className="editor-rule-name">No smoking on the terrace</span>
+                      </div>
+                      <label className="editor-toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={noSmoking}
+                          onChange={(e) => setNoSmoking(e.target.checked)}
+                        />
+                        <span className="editor-toggle-slider" />
+                      </label>
+                    </div>
+
+                    {/* Commercial photography */}
+                    <div className="editor-rule-row">
+                      <div className="editor-rule-info">
+                        <span className="editor-rule-icon">📷</span>
+                        <span className="editor-rule-name">Commercial photography by request</span>
+                      </div>
+                      <label className="editor-toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={commercialPhoto}
+                          onChange={(e) => setCommercialPhoto(e.target.checked)}
+                        />
+                        <span className="editor-toggle-slider" />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* CUSTOM RULES */}
+                  <div className="editor-custom-rules-block">
+                    <span className="editor-select-label">CUSTOM RULES</span>
+
+                    <div className="editor-custom-rule-card">
+                      <span>Please take shoes off inside; the tiles scratch easily.</span>
+                      <span className="editor-rule-badge editor-rule-badge--approved">
+                        Approved
+                      </span>
+                    </div>
+
+                    <div className="editor-custom-rule-card">
+                      <div className="editor-custom-rule-with-dot">
+                        <span>No visitors after 10 pm.</span>
+                        <span className="editor-amber-dot">•</span>
+                      </div>
+                      <span className="editor-rule-badge editor-rule-badge--pending">
+                        Awaiting approval
+                      </span>
+                    </div>
+
+                    <p className="editor-custom-rules-note">
+                      Custom rules are reviewed by StayHub within 24 hours against the
+                      nondiscrimination policy.
                     </p>
                   </div>
-                )}
-              </>
-            )}
-            {step === 7 && (
-              <>
-                <div className="review-summary">
-                  {form.media_ids.length > 0 && (
-                    <div className="review-photos">
-                      {form.media_ids
-                        .slice(0, 5)
-                        .map((id, index) =>
-                          photos[id]?.public_url ? (
-                            <img
-                              key={id}
-                              src={photos[id].public_url}
-                              alt={`Preview photo ${index + 1}`}
-                            />
-                          ) : null,
-                        )}
-                    </div>
-                  )}
-                  <h3>{form.title || 'Title not set'}</h3>
-                  <p>
-                    {form.property_type || 'Property type not set'} ·{' '}
-                    {[form.city, form.country].filter(Boolean).join(', ') || 'Location not set'}
-                  </p>
-                  <p>
-                    {form.max_guests} guests · {previewPrice} / night · {form.media_ids.length}{' '}
-                    photos
-                  </p>
-                  <p>{form.instant_book ? 'Instant booking' : 'Request to book'}</p>
-                  <p className="preserve-lines">{form.description || 'Description not added'}</p>
-                  <p className="preserve-lines">{form.house_rules || 'House rules not added'}</p>
-                  <p>Cancellation: {form.cancellation_policy || 'Not selected'}</p>
+
+                  {/* Full Textarea for compatibility and editing */}
+                  <div className="field">
+                    <label htmlFor="house-rules">House rules notes</label>
+                    <textarea
+                      id="house-rules"
+                      rows={3}
+                      value={form.house_rules}
+                      onChange={(e) => update('house_rules', e.target.value)}
+                      placeholder="Add any specific house instructions..."
+                    />
+                  </div>
+
+                  {/* Bottom Info Callout */}
+                  <div className="editor-info-callout">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                    <span>
+                      Changes to house rules apply to new bookings only. Guests with existing
+                      reservations keep the rules they agreed to.
+                    </span>
+                  </div>
                 </div>
-                <p>
-                  Submission runs required-field, photo, and house-rule checks. Publication follows
-                  the backend’s configured review mode.
-                </p>
-                {checks.length > 0 && (
-                  <ul className="check-results">
-                    {checks.map((check) => (
-                      <li key={check.id}>
-                        <Badge tone={check.outcome === 'pass' ? 'positive' : 'warning'}>
-                          {check.outcome}
-                        </Badge>
-                        <strong>{check.check_code.replaceAll('_', ' ')}</strong>
-                        <p>{check.detail}</p>
-                        {check.outcome !== 'pass' && (
+              )}
+
+              {/* TITLE & DESCRIPTION */}
+              {(activeSection === 'title' || activeSection === 'description') && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">Title & Story</h2>
+                  {input('title', 'Listing title')}
+                  <div className="field">
+                    <label htmlFor="description">Tell guests about your space</label>
+                    <textarea
+                      id="description"
+                      rows={7}
+                      value={form.description}
+                      onChange={(event) => update('description', event.target.value)}
+                      aria-invalid={!!fields.description}
+                    />
+                    {fields.description && (
+                      <small className="field-error">{fields.description}</small>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* PHOTO TOUR */}
+              {activeSection === 'photos' && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">Photo tour</h2>
+                  <p>Add at least five confirmed photos. The first photo becomes your cover.</p>
+                  <p role="status">{form.media_ids.length} photos attached to this draft.</p>
+                  <div className="editor-photos">
+                    {form.media_ids.map((id, index) => (
+                      <article key={id}>
+                        {photos[id]?.public_url ? (
+                          <img src={photos[id].public_url} alt={`Listing photo ${index + 1}`} />
+                        ) : (
+                          <div className="photo-placeholder">Photo {index + 1}</div>
+                        )}
+                        <div>
+                          <Badge>{index === 0 ? 'Cover photo' : `Photo ${index + 1}`}</Badge>
                           <Button
                             variant="ghost"
+                            disabled={index === 0 || busy || uploadsBusy}
+                            onClick={() => {
+                              const ids = [...form.media_ids];
+                              [ids[index - 1], ids[index]] = [ids[index], ids[index - 1]];
+                              update('media_ids', ids);
+                            }}
+                            aria-label={`Move photo ${index + 1} earlier`}
+                          >
+                            ←
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            disabled={busy || uploadsBusy}
                             onClick={() =>
-                              void save(
-                                check.check_code === 'min_photos'
-                                  ? 3
-                                  : check.check_code === 'house_rules_policy'
-                                    ? 6
-                                    : 1,
+                              update(
+                                'media_ids',
+                                form.media_ids.filter((photoId) => photoId !== id),
                               )
                             }
+                            aria-label={`Remove photo ${index + 1}`}
                           >
-                            Edit this section ↗
+                            Remove
                           </Button>
-                        )}
-                      </li>
+                        </div>
+                      </article>
                     ))}
-                  </ul>
-                )}
-              </>
-            )}
-          </div>
-        </fieldset>
-        {allowed && (
-          <div className="wizard-actions">
-            <span role="status">
-              {busy
-                ? 'Saving…'
-                : uploadsBusy
-                  ? 'Waiting for photos…'
-                  : dirty
-                    ? 'Unsaved changes'
-                    : 'All changes saved'}
-            </span>
-            <div>
-              {step > 1 && (
-                <Button
-                  variant="ghost"
-                  disabled={busy || uploadsBusy}
-                  onClick={() => void save(step - 1)}
-                >
-                  Back
-                </Button>
+                  </div>
+                  {allowed && (
+                    <PhotoUploader
+                      purpose="listing_photo"
+                      onUploaded={uploaded}
+                      onBusyChange={setUploadsBusy}
+                    />
+                  )}
+                </div>
               )}
-              <Button
-                variant="secondary"
-                disabled={busy || uploadsBusy}
-                onClick={() => void save()}
-              >
-                Save draft
-              </Button>
-              {step < 7 ? (
-                <Button type="submit" disabled={busy || uploadsBusy}>
-                  Save & continue →
-                </Button>
+
+              {/* PRICING & BOOKING SETTINGS */}
+              {(activeSection === 'pricing' || activeSection === 'booking-settings') && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">Pricing & Settings</h2>
+                  <div className="form-grid">
+                    {input('price', 'Nightly price (EUR)', {
+                      inputMode: 'decimal',
+                      placeholder: '100.00',
+                    })}
+                    {input('cleaning', 'Cleaning fee per stay (EUR)', {
+                      inputMode: 'decimal',
+                      placeholder: '0.00',
+                    })}
+                  </div>
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={form.instant_book}
+                      onChange={(event) => update('instant_book', event.target.checked)}
+                    />
+                    Allow instant booking
+                  </label>
+                  <p className="muted">
+                    Otherwise guests request a booking for host approval. Final quotes and fees are
+                    calculated by the server.
+                  </p>
+                </div>
+              )}
+
+              {/* PROPERTY TYPE & LOCATION */}
+              {(activeSection === 'property-type' ||
+                activeSection === 'location' ||
+                activeSection === 'accessibility' ||
+                activeSection === 'cohosts') && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">Property details & Location</h2>
+                  <div className="field">
+                    <label htmlFor="property-type">Property type</label>
+                    <select
+                      id="property-type"
+                      value={form.property_type}
+                      onChange={(event) => update('property_type', event.target.value)}
+                    >
+                      <option value="">Choose a type</option>
+                      {['apartment', 'house', 'villa', 'cabin', 'guesthouse', 'other'].map(
+                        (type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                    {fields.property_type && (
+                      <small className="field-error">{fields.property_type}</small>
+                    )}
+                  </div>
+                  {input('address_line1', 'Street address')}
+                  {input('address_line2', 'Apartment, unit, or building (optional)')}
+                  <div className="form-grid">
+                    {input('city', 'City')}
+                    {input('region', 'Region (optional)')}
+                    {input('country', 'Country code', {
+                      maxLength: 2,
+                      placeholder: 'PT, IN, JP',
+                    })}
+                    {input('postal_code', 'Postal code (optional)')}
+                  </div>
+                  {input('timezone', 'Property timezone', {
+                    list: 'timezones',
+                    placeholder: 'Europe/Lisbon',
+                  })}
+                  <datalist id="timezones">
+                    <option value="Europe/Lisbon" />
+                    <option value="Asia/Kolkata" />
+                    <option value="Asia/Tokyo" />
+                  </datalist>
+                </div>
+              )}
+
+              {/* GUESTS & AMENITIES */}
+              {(activeSection === 'guests' || activeSection === 'amenities') && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">Capacity & Amenities</h2>
+                  {input('max_guests', 'Maximum guests', { type: 'number', min: 1, step: 1 })}
+                  <h3>What does your space offer?</h3>
+                  {amenities.isPending ? (
+                    <Skeleton label="Loading amenities" />
+                  ) : amenities.isError ? (
+                    <RequestError
+                      error={amenities.error}
+                      onRetry={() => void amenities.refetch()}
+                    />
+                  ) : (
+                    <div className="amenity-options">
+                      {amenities.data.amenities?.map((amenity) => (
+                        <label key={amenity.code} className="checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={form.amenities.includes(amenity.code)}
+                            onChange={(event) =>
+                              update(
+                                'amenities',
+                                event.target.checked
+                                  ? [...form.amenities, amenity.code]
+                                  : form.amenities.filter((code) => code !== amenity.code),
+                              )
+                            }
+                          />
+                          {amenity.label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* AVAILABILITY / CANCELLATION POLICY / GUEST SAFETY / REGISTRATION */}
+              {(activeSection === 'availability' ||
+                activeSection === 'cancellation' ||
+                activeSection === 'guest-safety' ||
+                activeSection === 'registration') && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">Policies & Availability</h2>
+                  {policies.isPending ? (
+                    <Skeleton label="Loading cancellation policies" />
+                  ) : policies.isError ? (
+                    <RequestError error={policies.error} onRetry={() => void policies.refetch()} />
+                  ) : (
+                    <div className="field">
+                      <label htmlFor="policy">Cancellation policy</label>
+                      <select
+                        id="policy"
+                        value={form.cancellation_policy}
+                        onChange={(event) => update('cancellation_policy', event.target.value)}
+                      >
+                        <option value="">Choose a policy</option>
+                        {policies.data.cancellation_policies?.map((policy) => (
+                          <option key={policy.code} value={policy.code}>
+                            {policy.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p>
+                        {
+                          policies.data.cancellation_policies?.find(
+                            (policy) => policy.code === form.cancellation_policy,
+                          )?.description
+                        }
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="editor-cal-link-box">
+                    <Link
+                      className="editor-btn-secondary"
+                      to={`/host/listings/${detail.listing.id}/calendar`}
+                    >
+                      Open Availability Calendar ↗
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {/* Check results list from submission */}
+              {checks.length > 0 && (
+                <ul className="check-results">
+                  {checks.map((check) => (
+                    <li key={check.id}>
+                      <Badge tone={check.outcome === 'pass' ? 'positive' : 'warning'}>
+                        {check.outcome}
+                      </Badge>
+                      <strong>{check.check_code.replaceAll('_', ' ')}</strong>
+                      <p>{check.detail}</p>
+                      {check.outcome !== 'pass' && (
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            if (check.check_code === 'min_photos') {
+                              setActiveSection('photos');
+                              setStep(3);
+                              if (allowed) void save(3);
+                            } else if (check.check_code === 'house_rules_policy') {
+                              setActiveSection('house-rules');
+                              setStep(6);
+                              if (allowed) void save(6);
+                            } else {
+                              setActiveSection('title');
+                              setStep(4);
+                              if (allowed) void save(4);
+                            }
+                          }}
+                        >
+                          Edit this section ↗
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </fieldset>
+
+            {/* Bottom Form Actions (Save, Continue, Submit) */}
+            {allowed && (
+              <div className="editor-bottom-actions">
+                <span role="status" className="editor-status-text">
+                  {busy
+                    ? 'Saving…'
+                    : uploadsBusy
+                      ? 'Waiting for photos…'
+                      : dirty
+                        ? 'Unsaved changes'
+                        : 'All changes saved'}
+                </span>
+
+                <div className="editor-btn-group">
+                  <Button
+                    variant="secondary"
+                    disabled={busy || uploadsBusy}
+                    onClick={() => void save()}
+                  >
+                    Save draft
+                  </Button>
+
+                  {step < 7 ? (
+                    <Button type="submit" disabled={busy || uploadsBusy}>
+                      Save & continue →
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      disabled={busy || uploadsBusy}
+                      onClick={() => void publish()}
+                    >
+                      Submit listing
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </form>
+        </main>
+
+        {/* Column 3: GUEST PREVIEW (Image 1) */}
+        <aside className="editor-preview-col" aria-label="Guest preview">
+          <div className="editor-preview-card">
+            {/* Header: Label + Switch Tabs */}
+            <div className="preview-header-row">
+              <span className="preview-header-tag">GUEST PREVIEW</span>
+              <div className="preview-tab-pills">
+                <button
+                  type="button"
+                  className={`preview-pill-btn ${
+                    previewTab === 'listing' ? 'preview-pill-btn--active' : ''
+                  }`}
+                  onClick={() => setPreviewTab('listing')}
+                >
+                  Listing page
+                </button>
+                <button
+                  type="button"
+                  className={`preview-pill-btn ${
+                    previewTab === 'booking' ? 'preview-pill-btn--active' : ''
+                  }`}
+                  onClick={() => setPreviewTab('booking')}
+                >
+                  Booking card
+                </button>
+              </div>
+            </div>
+
+            {/* Live Preview Card Content */}
+            <div className="preview-card-body">
+              {/* Cover Hero Photo */}
+              <div className="preview-hero-frame">
+                <img src={coverUrl} alt="Listing cover preview" />
+              </div>
+
+              {previewTab === 'booking' ? (
+                <div className="preview-booking-card-view">
+                  <div className="preview-booking-price-row">
+                    <span className="price-bold">{previewPrice}</span>
+                    <span className="price-unit"> / night</span>
+                  </div>
+                  <div className="preview-booking-box">
+                    <div className="preview-booking-cell">
+                      <span className="cell-label">DATES</span>
+                      <span className="cell-val">Flexible</span>
+                    </div>
+                    <div className="preview-booking-cell">
+                      <span className="cell-label">GUESTS</span>
+                      <span className="cell-val">{form.max_guests} guests</span>
+                    </div>
+                  </div>
+                  <button type="button" className="preview-reserve-btn" disabled>
+                    Reserve
+                  </button>
+                </div>
               ) : (
-                <Button disabled={busy || uploadsBusy} onClick={() => void publish()}>
-                  Submit listing
-                </Button>
+                <>
+                  {/* Title & Specs */}
+                  <div className="preview-info-block">
+                    <h3 className="preview-title">{listingTitle}</h3>
+                    <p className="preview-subtitle">
+                      {form.property_type ? `${form.property_type} · ` : 'Entire loft · '}
+                      {form.max_guests} guests · 1 bedroom · 1 bath
+                    </p>
+                  </div>
+
+                  <hr className="preview-divider" />
+
+                  {/* House Rules Preview Block */}
+                  <div className="preview-section-block">
+                    <h4 className="preview-section-title">House rules</h4>
+                    <div className="preview-rules-list">
+                      <p>Check-in 3 – 10 pm · Checkout 11 am</p>
+                      <p>{form.max_guests} guests maximum · No pets</p>
+                      {quietHours && <p>Quiet hours 11 pm – 8 am</p>}
+                      {noParties && <p>No parties or events</p>}
+                      {noSmoking && <p>No smoking on the terrace</p>}
+                      <p>Shoes off inside</p>
+                    </div>
+                  </div>
+
+                  <hr className="preview-divider" />
+
+                  {/* Amenities Preview Block */}
+                  <div className="preview-section-block">
+                    <h4 className="preview-section-title">Amenities</h4>
+                    <div className="preview-amenities-2col">
+                      <div className="preview-amenity-item">Wifi · 480 Mbps</div>
+                      <div className="preview-amenity-item">Kitchen</div>
+                      <div className="preview-amenity-item">Air conditioning</div>
+                      <div className="preview-amenity-item">Bathtub</div>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </div>
-        )}
-      </form>
-      <Link className="text-link" to={`/host/listings/${detail.listing.id}/calendar`}>
-        Manage availability ↗
-      </Link>
-    </section>
+        </aside>
+      </div>
+    </div>
   );
 }

@@ -13,7 +13,7 @@ export function SearchForm({ params, onSearch, variant = 'hero' }: SearchFormPro
   const [country, setCountry] = useState(params.get('country') || '');
   const [checkIn, setCheckIn] = useState(params.get('check_in') || '');
   const [checkOut, setCheckOut] = useState(params.get('check_out') || '');
-  const [guests, setGuests] = useState(params.get('guests') || '2');
+  const [guests, setGuests] = useState(params.get('guests') || '1');
 
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -57,7 +57,7 @@ export function SearchForm({ params, onSearch, variant = 'hero' }: SearchFormPro
     return `${months[d.getMonth()]} ${d.getDate()}`;
   }
 
-  const guestCount = Math.max(1, Math.min(16, Number(guests) || 2));
+  const guestCount = Math.max(1, Math.min(16, Number(guests) || 1));
 
   return (
     <div
@@ -79,6 +79,8 @@ export function SearchForm({ params, onSearch, variant = 'hero' }: SearchFormPro
             value={city}
             onChange={(e) => setCity(e.target.value)}
             aria-label="Destination"
+            autoComplete="off"
+            spellCheck={false}
           />
           {/* Hidden country input for ISO country code if provided */}
           <input

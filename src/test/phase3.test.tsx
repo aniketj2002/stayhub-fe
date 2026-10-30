@@ -239,4 +239,105 @@ describe('Phase 3 workflows', () => {
       'check_in=2030-02-01',
     );
   });
+
+  it('defaults guests to 1 and keeps booking dates empty when not searched or when duration is unavailable', async () => {
+    const listingWithBookedNight = {
+      ...publicDetail,
+      unavailable_dates: [{ night: '2030-02-02', status: 'booked' }],
+    };
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/listings/home-1')) {
+          return json({ listing: listingWithBookedNight });
+        }
+        return json({ listing: publicDetail });
+      }),
+    );
+
+    // Case 1: No dates or guests in URL (default guests 1, dates empty)
+    mount('/listings/home-1', '/listings/:id', <ListingDetailPage />);
+    await screen.findByText(publicDetail.title);
+    expect(screen.getByText('1 guest')).toBeTruthy();
+    expect(
+      screen.getByText('Add your dates to see availability and the exact total.'),
+    ).toBeTruthy();
+    cleanup();
+
+    // Case 2: User searched dates that conflict with a booked night (2030-02-02)
+    // Duration cannot be selected, so it must be kept empty
+    mount(
+      '/listings/home-1?check_in=2030-02-01&check_out=2030-02-04',
+      '/listings/:id',
+      <ListingDetailPage />,
+    );
+    await screen.findByText(publicDetail.title);
+    expect(
+      screen.getByText('Add your dates to see availability and the exact total.'),
+    ).toBeTruthy();
+    cleanup();
+
+    // Case 3: User filtered by guests (guests=3)
+    mount('/listings/home-1?guests=3', '/listings/:id', <ListingDetailPage />);
+    await screen.findByText(publicDetail.title);
+    expect(screen.getByText('3 guests')).toBeTruthy();
+  });
+
+  it('greys out and prevents selecting booked and blocked nights for a listing', async () => {
+    const listingWithUnavailableDates = {
+      ...publicDetail,
+      unavailable_dates: [
+        { night: '2030-02-05', status: 'booked' },
+        { night: '2030-02-08', status: 'blocked' },
+      ],
+    };
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/listings/home-1')) {
+          return json({ listing: listingWithUnavailableDates });
+        }
+        return json({ listing: publicDetail });
+      }),
+    );
+
+    mount(
+      '/listings/home-1?check_in=2030-02-01&check_out=2030-02-03',
+      '/listings/:id',
+      <ListingDetailPage />,
+    );
+    await screen.findByText(publicDetail.title);
+
+    // Booked night 2030-02-05 is disabled and has booked classes
+    const bookedBtn = screen.getByLabelText('2030-02-05, Booked');
+    expect(bookedBtn).toBeTruthy();
+    expect(bookedBtn.hasAttribute('disabled')).toBe(true);
+    expect(bookedBtn.className).toContain('cal-day-btn--booked');
+    expect(bookedBtn.className).toContain('cal-day-btn--unavailable');
+    expect(bookedBtn.parentElement?.className).toContain('cal-day-cell--booked');
+
+    // Blocked night 2030-02-08 is disabled and has blocked classes
+    const blockedBtn = screen.getByLabelText('2030-02-08, Blocked');
+    expect(blockedBtn).toBeTruthy();
+    expect(blockedBtn.hasAttribute('disabled')).toBe(true);
+    expect(blockedBtn.className).toContain('cal-day-btn--blocked');
+    expect(blockedBtn.className).toContain('cal-day-btn--unavailable');
+    expect(blockedBtn.parentElement?.className).toContain('cal-day-cell--blocked');
+
+    // Available night 2030-02-04 is enabled
+    const availableBtn = screen.getByLabelText('2030-02-04');
+    expect(availableBtn.hasAttribute('disabled')).toBe(false);
+
+    // Calendar legend displays Booked and Blocked
+    expect(screen.getByText('Booked')).toBeTruthy();
+    expect(screen.getByText('Blocked')).toBeTruthy();
+
+    // Clicking booked or blocked night does not select it
+    fireEvent.click(bookedBtn);
+    expect(bookedBtn.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(blockedBtn);
+    expect(blockedBtn.getAttribute('aria-pressed')).toBe('false');
+  });
 });

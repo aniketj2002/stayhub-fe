@@ -34,13 +34,13 @@ export function DatePickerPanel({ checkIn, checkOut, onChange, onClose }: DatePi
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-  // Parse check-in / check-out or default to October 2026 to match reference mock
-  const initialDate = checkIn ? new Date(checkIn) : new Date(2026, 9, 3);
+  // Parse check-in / check-out or default to current date
+  const initialDate = checkIn ? new Date(checkIn + 'T00:00:00') : today;
   const [viewYear, setViewYear] = useState(() =>
-    isNaN(initialDate.getTime()) ? 2026 : initialDate.getFullYear(),
+    isNaN(initialDate.getTime()) ? today.getFullYear() : initialDate.getFullYear(),
   );
   const [viewMonth, setViewMonth] = useState(() =>
-    isNaN(initialDate.getTime()) ? 9 : initialDate.getMonth(),
+    isNaN(initialDate.getTime()) ? today.getMonth() : initialDate.getMonth(),
   );
 
   // Next month

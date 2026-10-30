@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Button, Dialog, Skeleton } from '../../components/ui';
@@ -7,6 +7,8 @@ import { formatMoney, formatTimestamp } from '../../lib/format';
 import { getQuote, listingKeys, publicListing } from '../listings/api';
 import type { PublicListing } from '../listings/types';
 import { addDays, dateRangeError, nightsInRange, shiftMonth } from '../calendar/dates';
+import { useSession } from '../auth/session';
+import { PaymentScreen } from '../reservations/PaymentScreen';
 
 // NOTE: Standout highlights (location rating %, guest favorite ranking) are computed/fallback UI components
 // to match the reference design until backend provides structured listing highlights.
@@ -97,22 +99,64 @@ export function ListingDetailPage() {
 }
 
 function ListingDetail({ listing }: { listing: PublicListing }) {
+  const session = useSession();
   const [params, setParams] = useSearchParams();
+  const [reserving, setReserving] = useState(params.get('reserve') === '1');
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const defaultCheckIn = todayIso;
-  const defaultCheckOut = addDays(todayIso, 3);
 
-  const checkIn = params.has('check_in') ? params.get('check_in')! : defaultCheckIn;
-  const checkOut = params.has('check_out') ? params.get('check_out')! : defaultCheckOut;
+  const unavailableMap = useMemo(() => {
+    const map = new Map<string, 'booked' | 'blocked'>();
+    const unavailableNights = listing.unavailable_dates || [];
+    for (const u of unavailableNights) {
+      if (u.status === 'booked' || u.status === 'blocked') {
+        map.set(u.night, u.status);
+      }
+    }
+    return map;
+  }, [listing.unavailable_dates]);
+
+  const unavailableSet = useMemo(() => new Set(unavailableMap.keys()), [unavailableMap]);
+
+  const searchedIn = params.get('check_in') || '';
+  const searchedOut = params.get('check_out') || '';
+
+  const isRangeSelectable = useMemo(() => {
+    if (!searchedIn || !searchedOut) return false;
+    if (dateRangeError(searchedIn, searchedOut)) return false;
+    if (searchedIn < todayIso) return false;
+    const nights = nightsInRange(searchedIn, searchedOut);
+    if (nights.length === 0) return false;
+    if (nights.some((night) => unavailableSet.has(night))) return false;
+    return true;
+  }, [searchedIn, searchedOut, todayIso, unavailableSet]);
+
+  const isSingleCheckInValid =
+    searchedIn && !searchedOut && searchedIn >= todayIso && !unavailableSet.has(searchedIn);
+
+  const checkIn = isRangeSelectable ? searchedIn : isSingleCheckInValid ? searchedIn : '';
+
+  const checkOut = isRangeSelectable ? searchedOut : '';
+
+  useEffect(() => {
+    if (searchedIn && searchedOut && !isRangeSelectable) {
+      const next = new URLSearchParams(params);
+      next.delete('check_in');
+      next.delete('check_out');
+      setParams(next, { replace: true });
+    }
+  }, [searchedIn, searchedOut, isRangeSelectable, params, setParams]);
+
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showMoreDesc, setShowMoreDesc] = useState(false);
 
   function handleUpdateDates(nextIn: string, nextOut: string) {
     const next = new URLSearchParams(params);
-    next.set('check_in', nextIn);
-    next.set('check_out', nextOut);
+    if (nextIn) next.set('check_in', nextIn);
+    else next.delete('check_in');
+    if (nextOut) next.set('check_out', nextOut);
+    else next.delete('check_out');
     setParams(next, { replace: true });
   }
 
@@ -616,6 +660,7 @@ function ListingDetail({ listing }: { listing: PublicListing }) {
             checkIn={checkIn}
             checkOut={checkOut}
             onUpdateDates={handleUpdateDates}
+            onReserve={() => setReserving(true)}
           />
 
           {/* Availability Calendar Card - ALWAYS VISIBLE AT BOTTOM (Screen 07) */}
@@ -630,6 +675,27 @@ function ListingDetail({ listing }: { listing: PublicListing }) {
           </div>
         </div>
       </div>
+
+      {/* Reservation Payment Screens at reservation time */}
+      {reserving && (
+        <PaymentScreen
+          id={listing.id}
+          params={
+            new URLSearchParams({
+              check_in: checkIn,
+              check_out: checkOut,
+              guests: String(params.get('guests') || '1'),
+            })
+          }
+          userId={
+            session.identity?.subject_type === 'user' ? session.identity.user.id : 'demo-guest'
+          }
+          listing={listing}
+          isModal
+          onClose={() => setReserving(false)}
+          onEditDatesOrGuests={() => setReserving(false)}
+        />
+      )}
     </div>
   );
 }
@@ -961,44 +1027,49 @@ function QuotePanel({
   checkIn,
   checkOut,
   onUpdateDates,
+  onReserve,
 }: {
   listing: PublicListing;
   checkIn: string;
   checkOut: string;
   onUpdateDates: (nextCheckIn: string, nextCheckOut: string) => void;
+  onReserve: () => void;
 }) {
   const [params, setParams] = useSearchParams();
   const rawGuests = params.get('guests') || '1';
   const guests = Number(rawGuests);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
-  const unavailableSet = useMemo(() => {
+  const today = new Date();
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  const unavailableMap = useMemo(() => {
+    const map = new Map<string, 'booked' | 'blocked'>();
     const unavailableNights = listing.unavailable_dates || [];
-    const set = new Set<string>();
-    if (unavailableNights.length) {
-      for (const u of unavailableNights) {
-        if (u.status === 'booked' || u.status === 'blocked') {
-          set.add(u.night);
-        }
+    for (const u of unavailableNights) {
+      if (u.status === 'booked' || u.status === 'blocked') {
+        map.set(u.night, u.status);
       }
-    } else {
-      // Screen 07 mock indicates Oct 12 is booked
-      set.add('2026-10-12');
     }
-    return set;
+    return map;
   }, [listing.unavailable_dates]);
 
+  const unavailableSet = useMemo(() => new Set(unavailableMap.keys()), [unavailableMap]);
+
   const rangeError = checkIn && checkOut ? dateRangeError(checkIn, checkOut) : '';
-  const hasBookedNight =
-    !rangeError &&
-    checkIn &&
-    checkOut &&
-    nightsInRange(checkIn, checkOut).some((night) => unavailableSet.has(night));
+  const unavailableNightsInStay =
+    !rangeError && checkIn && checkOut
+      ? nightsInRange(checkIn, checkOut).filter((night) => unavailableMap.has(night))
+      : checkIn && unavailableMap.has(checkIn)
+        ? [checkIn]
+        : [];
+
+  const hasUnavailableNight = unavailableNightsInStay.length > 0;
 
   const dateError =
     rangeError ||
-    (hasBookedNight
-      ? 'These dates include booked or unavailable nights. Please choose other dates.'
+    (hasUnavailableNight
+      ? `These dates include ${unavailableNightsInStay.some((n) => unavailableMap.get(n) === 'booked') ? 'booked' : 'blocked'} nights. Please choose other dates.`
       : '');
 
   const guestError =
@@ -1079,11 +1150,15 @@ function QuotePanel({
               <input
                 id="quote-in"
                 type="date"
+                min={todayIso}
                 className="cell-hidden-native-input"
                 value={checkIn}
                 onChange={(e) => {
-                  onUpdateDates(e.target.value, checkOut);
-                  if (e.target.value && checkOut) setCalendarOpen(false);
+                  const val = e.target.value;
+                  if (!unavailableSet.has(val)) {
+                    onUpdateDates(val, checkOut);
+                    if (val && checkOut) setCalendarOpen(false);
+                  }
                 }}
                 aria-label="Check-in"
               />
@@ -1106,11 +1181,16 @@ function QuotePanel({
               <input
                 id="quote-out"
                 type="date"
+                min={checkIn ? addDays(checkIn, 1) : todayIso}
                 className="cell-hidden-native-input"
                 value={checkOut}
                 onChange={(e) => {
-                  onUpdateDates(checkIn, e.target.value);
-                  if (checkIn && e.target.value) setCalendarOpen(false);
+                  const val = e.target.value;
+                  const nights = checkIn && val ? nightsInRange(checkIn, val) : [];
+                  if (!unavailableSet.has(val) && !nights.some((n) => unavailableSet.has(n))) {
+                    onUpdateDates(checkIn, val);
+                    if (checkIn && val) setCalendarOpen(false);
+                  }
                 }}
                 aria-label="Checkout"
               />
@@ -1215,6 +1295,15 @@ function QuotePanel({
       <Link
         className="button button--reserve"
         to={`/checkout/${listing.id}?${checkoutParams}`}
+        onClick={(e) => {
+          if (!valid) {
+            e.preventDefault();
+            setCalendarOpen(true);
+          } else {
+            e.preventDefault();
+            onReserve();
+          }
+        }}
         aria-label="Reserve"
       >
         {current?.instant_book ? 'Reserve' : 'Reserve'}
@@ -1302,19 +1391,16 @@ function AvailabilityCalendar({
   const [navMonth, setNavMonth] = useState<string | null>(null);
   const viewMonth = navMonth ?? defaultMonth;
 
-  const bookedSet = useMemo(() => {
-    const set = new Set<string>();
-    if (listing.unavailable_dates?.length) {
+  const unavailableMap = useMemo(() => {
+    const map = new Map<string, 'booked' | 'blocked'>();
+    if (listing.unavailable_dates) {
       for (const u of listing.unavailable_dates) {
         if (u.status === 'booked' || u.status === 'blocked') {
-          set.add(u.night);
+          map.set(u.night, u.status);
         }
       }
-    } else {
-      // Screen 07 mock indicates Oct 12 is booked
-      set.add('2026-10-12');
     }
-    return set;
+    return map;
   }, [listing.unavailable_dates]);
 
   const nextMonth = shiftMonth(viewMonth, 1);
@@ -1338,7 +1424,11 @@ function AvailabilityCalendar({
       return;
     }
 
-    if (bookedSet.has(day)) return;
+    if (unavailableMap.has(day)) {
+      const status = unavailableMap.get(day);
+      setCalendarError(`This night is ${status}. Please choose an available night.`);
+      return;
+    }
 
     setCalendarError('');
 
@@ -1362,10 +1452,11 @@ function AvailabilityCalendar({
 
       // Check for unavailable nights between checkIn and day
       const nights = nightsInRange(checkIn, day);
-      const bookedNight = nights.find((n) => bookedSet.has(n));
-      if (bookedNight) {
+      const unavailableNight = nights.find((n) => unavailableMap.has(n));
+      if (unavailableNight) {
+        const status = unavailableMap.get(unavailableNight);
         setCalendarError(
-          `Your stay includes booked nights (${formatShortDate(bookedNight)}). Choose another checkout date.`,
+          `Your stay includes ${status} nights (${formatShortDate(unavailableNight)}). Choose another checkout date.`,
         );
         return;
       }
@@ -1424,11 +1515,27 @@ function AvailabilityCalendar({
         ))}
         {daysInMonth.map((day) => {
           const dayNum = Number(day.slice(-2));
-          const isBooked = bookedSet.has(day);
+          const status = unavailableMap.get(day);
+          const isBooked = status === 'booked';
+          const isBlocked = status === 'blocked';
+          const isUnavailable = isBooked || isBlocked;
           const isPast = day < todayString;
-          const isCheckIn = day === checkIn;
-          const isCheckOut = day === checkOut;
-          const isInRange = checkIn && checkOut && day > checkIn && day < checkOut;
+
+          // If checkIn is set and waiting for checkOut, is this day unreachable because it crosses an unavailable night?
+          const wouldCrossUnavailable = Boolean(
+            checkIn &&
+              !checkOut &&
+              day > checkIn &&
+              nightsInRange(checkIn, day).some((n) => unavailableMap.has(n)),
+          );
+
+          const isCheckIn = day === checkIn && !isUnavailable;
+          const isCheckOut = day === checkOut && !isUnavailable;
+          const isInRange = Boolean(
+            checkIn && checkOut && day > checkIn && day < checkOut && !isUnavailable,
+          );
+
+          const isDisabled = isUnavailable || isPast || wouldCrossUnavailable;
 
           let cellClass = 'cal-day-cell';
           if (isInRange) cellClass += ' cal-day-cell--in-range';
@@ -1436,21 +1543,38 @@ function AvailabilityCalendar({
           if (isCheckIn && checkOut) cellClass += ' cal-day-cell--has-end';
           if (isCheckOut) cellClass += ' cal-day-cell--range-end';
           if (isPast) cellClass += ' cal-day-cell--past';
+          if (isBooked) cellClass += ' cal-day-cell--booked cal-day-cell--unavailable';
+          if (isBlocked) cellClass += ' cal-day-cell--blocked cal-day-cell--unavailable';
+          if (wouldCrossUnavailable) cellClass += ' cal-day-cell--unreachable';
 
           let btnClass = 'cal-day-btn';
           if (isCheckIn || isCheckOut) btnClass += ' cal-day-btn--selected';
           if (isInRange) btnClass += ' cal-day-btn--in-range';
-          if (isBooked) btnClass += ' cal-day-btn--booked';
+          if (isBooked) btnClass += ' cal-day-btn--booked cal-day-btn--unavailable';
+          if (isBlocked) btnClass += ' cal-day-btn--blocked cal-day-btn--unavailable';
           if (isPast) btnClass += ' cal-day-btn--past';
+          if (wouldCrossUnavailable) btnClass += ' cal-day-btn--unreachable';
+
+          const ariaStatus = isBooked
+            ? ', Booked'
+            : isBlocked
+              ? ', Blocked'
+              : isPast
+                ? ', Past date'
+                : isCheckIn
+                  ? ', Check-in'
+                  : isCheckOut
+                    ? ', Checkout'
+                    : '';
 
           return (
             <div key={day} className={cellClass}>
               <button
                 type="button"
                 className={btnClass}
-                disabled={isBooked || isPast}
+                disabled={isDisabled}
                 onClick={() => handleDayClick(day)}
-                aria-label={`${day}${isBooked ? ', Booked' : isPast ? ', Past date' : isCheckIn ? ', Check-in' : isCheckOut ? ', Checkout' : ''}`}
+                aria-label={`${day}${ariaStatus}`}
                 aria-pressed={isCheckIn || isCheckOut || !!isInRange}
               >
                 {dayNum}
@@ -1474,6 +1598,9 @@ function AvailabilityCalendar({
           </span>
           <span className="cal-legend-item">
             <span className="cal-legend-booked-sample">12</span> Booked
+          </span>
+          <span className="cal-legend-item">
+            <span className="cal-legend-blocked-sample" /> Blocked
           </span>
         </div>
         {(checkIn || checkOut) && (

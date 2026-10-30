@@ -102,7 +102,7 @@ export function HostListingsPage() {
       const data = await createListing();
       cache.setQueryData(listingKeys.detail(data.listing.id), data);
       void cache.invalidateQueries({ queryKey: listingKeys.all });
-      navigate(`/host/listings/${data.listing.id}/edit`);
+      navigate(`/host/listings/${data.listing.id}/edit?mode=smart-setup`);
     } catch (e) {
       setError(e);
     } finally {
