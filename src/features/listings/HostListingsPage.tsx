@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { RequestError } from '../../components/RequestError';
-import { Skeleton } from '../../components/ui';
+import { Drawer, Skeleton } from '../../components/ui';
 import { formatMoney } from '../../lib/format';
 import { hasListingPermission } from '../auth/permissions';
+import { CohostPanel } from '../cohosts/CohostPanel';
 import { createListing, hostListings, listingKeys } from './api';
 import { HostMetrics } from './HostMetrics';
 import { HostRecentActivity } from './HostRecentActivity';
@@ -93,6 +94,7 @@ export function HostListingsPage() {
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'listed' | 'under_review' | 'in_progress'
   >('all');
+  const [selectedCohostListingId, setSelectedCohostListingId] = useState<string | null>(null);
 
   async function create() {
     if (creating) return;
@@ -122,10 +124,10 @@ export function HostListingsPage() {
         else if (l.status === 'submitted' || l.status === 'under_review')
           statusLabel = 'Under review';
 
-        // NOTE: Listing rating and review count are not currently returned by GET /api/v1/host/listings.
-        // Fallback dummy values are provided so the UI matches the reference design.
-        const dummyRatings = ['★ 4.96 (212)', '★ 4.81 (64)', 'No reviews yet', 'No reviews yet'];
-        const rating = dummyRatings[index % dummyRatings.length];
+        const rating =
+          l.review_count && l.review_count > 0
+            ? `★ ${(l.rating_avg ?? 0).toFixed(2)} (${l.review_count})`
+            : 'No reviews yet';
 
         const fallbackImages = [
           'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80',
@@ -319,7 +321,7 @@ export function HostListingsPage() {
                     </div>
                   </div>
 
-                  {/* 3 Action Buttons */}
+                  {/* Action Buttons */}
                   <div className="host-card-actions-row">
                     <Link
                       to={item.is_real ? `/host/listings/${item.id}/edit` : `/host/listings`}
@@ -333,6 +335,15 @@ export function HostListingsPage() {
                     >
                       Calendar
                     </Link>
+                    {item.is_real && (
+                      <button
+                        type="button"
+                        className="host-card-action-btn"
+                        onClick={() => setSelectedCohostListingId(item.id)}
+                      >
+                        Co-hosts
+                      </button>
+                    )}
                     <Link
                       to={item.is_real ? `/listings/${item.id}` : `/search`}
                       className="host-card-action-btn host-card-action-btn--preview"
@@ -363,6 +374,19 @@ export function HostListingsPage() {
           {/* Recent Activity Section (Missing Backend Component) */}
           <HostRecentActivity />
         </>
+      )}
+
+      {selectedCohostListingId && (
+        <Drawer
+          open={!!selectedCohostListingId}
+          title="Co-hosts & Team"
+          onClose={() => setSelectedCohostListingId(null)}
+          width="600px"
+        >
+          <div style={{ padding: '24px' }}>
+            <CohostPanel listingId={selectedCohostListingId} />
+          </div>
+        </Drawer>
       )}
     </div>
   );

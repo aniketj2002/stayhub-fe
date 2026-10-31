@@ -219,7 +219,9 @@ export function PaymentScreen({
   const nightlyTotalMinor = current?.breakdown?.nightly_total_minor ?? 64000;
   const cleaningFeeMinor = current?.breakdown?.cleaning_fee_minor ?? 3500;
   const guestFeeMinor = current?.breakdown?.guest_fee_minor ?? 9500;
-  const subtotalMinor = nightlyTotalMinor + cleaningFeeMinor + guestFeeMinor;
+  const discountMinor = current?.breakdown?.discount_minor ?? 0;
+  const discountKind = current?.breakdown?.discount_kind;
+  const subtotalMinor = nightlyTotalMinor - discountMinor + cleaningFeeMinor + guestFeeMinor;
   const taxMinor = Math.max(0, totalMinor - subtotalMinor) || 2800;
   const displayTotalBeforeTaxes = subtotalMinor;
 
@@ -952,6 +954,12 @@ export function PaymentScreen({
                       </span>
                       <span>{formatMoney(nightlyTotalMinor, currency)}</span>
                     </div>
+                    {discountMinor > 0 && (
+                      <div className="price-item-row" style={{ color: '#059669' }}>
+                        <span>{discountKind ? `${discountKind} discount` : 'Special discount'}</span>
+                        <span>-{formatMoney(discountMinor, currency)}</span>
+                      </div>
+                    )}
                     <div className="price-item-row">
                       <span>Cleaning fee</span>
                       <span>{formatMoney(cleaningFeeMinor, currency)}</span>

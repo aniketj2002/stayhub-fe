@@ -8,49 +8,58 @@ import { acceptSession, becomeHost, safeReturnTo, signOut, updateProfile, useSes
 import type { Tokens } from './types';
 
 export function AuthPage({ mode }: { mode: 'login' | 'register' | 'admin' }) {
-  const session = useSession();
+  const admin = mode === 'admin';
+  const session = useSession(admin ? 'admin' : 'user');
   const [params] = useSearchParams();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const fields = fieldErrors(error);
   const registering = mode === 'register';
-  const admin = mode === 'admin';
+  const [roleTab, setRoleTab] = useState<'guest' | 'host'>( 'guest' );
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const fields = fieldErrors(error);
   const returnTo = safeReturnTo(params.get('returnTo'));
-  if (session.status === 'loading')
+
+  if (session.status === 'loading') {
     return (
-      <div className="page-content">
+      <div className="page-content auth-loading-wrapper">
         <Skeleton label="Restoring your session" />
       </div>
     );
-  if (session.identity) {
-    if (
-      (admin && session.identity.subject_type === 'admin') ||
-      (!admin && session.identity.subject_type === 'user')
-    )
-      return <Navigate to={admin ? '/account' : returnTo} replace />;
-    return (
-      <div className="page-content">
-        <h1>Switch accounts</h1>
-        <p>
-          You are signed in with a {session.identity.subject_type} account. Sign out on your account
-          page before using this login.
-        </p>
-        <Link className="button button--primary" to="/account">
-          Your account
-        </Link>
-      </div>
-    );
   }
+
+  if (session.identity) {
+    if (admin && session.identity.subject_type === 'admin') {
+      // Routing for admin user on admin login: ALWAYS navigate to the Admin Dashboard (/admin)
+      const target =
+        returnTo && returnTo.startsWith('/admin') && returnTo !== '/admin/login'
+          ? returnTo
+          : '/admin';
+      return <Navigate to={target} replace />;
+    }
+
+    if (!admin && session.identity.subject_type === 'user') {
+      // Normal user identity on normal login
+      const hostTarget = returnTo && returnTo.startsWith('/host') ? returnTo : '/host/today';
+      const userTarget =
+        session.identity.user.is_host && roleTab === 'host' ? hostTarget : returnTo;
+      return <Navigate to={userTarget} replace />;
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError(null);
     const data = new FormData(event.currentTarget);
-    const password = String(data.get('password'));
+    const emailVal = String(data.get('email') || email).trim();
+    const passwordVal = String(data.get('password') || password);
+
     if (
       registering &&
-      (new TextEncoder().encode(password).length < 8 ||
-        new TextEncoder().encode(password).length > 72)
+      (new TextEncoder().encode(passwordVal).length < 8 ||
+        new TextEncoder().encode(passwordVal).length > 72)
     ) {
       setError(
         new ApiError(400, 'VALIDATION_ERROR', 'Please check your password.', [
@@ -60,24 +69,29 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' | 'admin' }) {
       setBusy(false);
       return;
     }
+
+    const endpoint = registering
+      ? '/api/v1/auth/register'
+      : admin
+        ? '/api/v1/auth/admin/login'
+        : '/api/v1/auth/login';
+
     try {
-      const tokens = await request<Tokens>(
-        `/api/v1/auth/${registering ? 'register' : admin ? 'admin/login' : 'login'}`,
-        {
-          method: 'POST',
-          auth: false,
-          body: {
-            email: String(data.get('email')).trim(),
-            password,
-            ...(registering
-              ? {
-                  full_name: String(data.get('full_name')).trim(),
-                  is_host: data.get('is_host') === 'on',
-                }
-              : {}),
-          },
+      const tokens = await request<Tokens>(endpoint, {
+        method: 'POST',
+        auth: false,
+        body: {
+          email: emailVal,
+          password: passwordVal,
+          ...(registering
+            ? {
+                full_name: String(data.get('full_name')).trim(),
+                is_host: data.get('is_host') === 'on',
+              }
+            : {}),
         },
-      );
+      });
+
       acceptSession(tokens);
     } catch (e) {
       setError(e);
@@ -85,25 +99,138 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' | 'admin' }) {
       setBusy(false);
     }
   }
+
   const query = `?returnTo=${encodeURIComponent(returnTo)}`;
+
   return (
     <section className="page-content auth-form">
-      <p className="eyebrow">{admin ? 'STAYHUB ADMIN' : 'YOUR ACCOUNT'}</p>
-      <h1>{registering ? 'Make yourself at home' : admin ? 'Admin sign in' : 'Welcome back'}</h1>
-      <p>
-        {registering
-          ? 'Your next great stay starts here.'
-          : admin
-            ? 'Separate access for platform administrators.'
-            : 'Pick up where you left off.'}
-      </p>
+      {/* On normal login page, ONLY show Guest and Host tabs */}
+      {!registering && !admin && (
+        <div className="auth-persona-switcher" role="tablist" aria-label="Choose workspace login">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={roleTab === 'guest'}
+            className={`auth-persona-tab ${roleTab === 'guest' ? 'active' : ''}`}
+            onClick={() => {
+              setRoleTab('guest');
+              setError(null);
+            }}
+          >
+            <span className="auth-tab-icon" aria-hidden="true">🧳</span>
+            <span>Guest</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={roleTab === 'host'}
+            className={`auth-persona-tab ${roleTab === 'host' ? 'active' : ''}`}
+            onClick={() => {
+              setRoleTab('host');
+              setError(null);
+            }}
+          >
+            <span className="auth-tab-icon" aria-hidden="true">🏠</span>
+            <span>Host</span>
+          </button>
+        </div>
+      )}
+
+      {/* Header Eyebrow & Title */}
+      <div className="auth-form-header">
+        <p className="eyebrow">
+          {registering
+            ? 'JOIN STAYHUB'
+            : admin
+              ? 'STAYHUB ADMIN · PLATFORM OPS'
+              : roleTab === 'host'
+                ? 'HOST WORKSPACE · STAYHUB'
+                : 'GUEST PORTAL · STAYHUB'}
+        </p>
+        <h1 className="auth-form-title">
+          {registering
+            ? 'Make yourself at home'
+            : admin
+              ? 'Admin console sign in'
+              : roleTab === 'host'
+                ? 'Welcome back, host'
+                : 'Welcome back'}
+        </h1>
+        <p className="auth-form-subtitle">
+          {registering
+            ? 'Your next great stay starts here. Create an account to get started.'
+            : admin
+              ? 'Restricted platform console. Sign in with administrative credentials to access operations.'
+              : roleTab === 'host'
+                ? 'Manage your calendar, review reservations, and inspect your payouts.'
+                : 'Plan upcoming trips, explore design-led stays, and manage your wishlist.'}
+        </p>
+      </div>
+
+      {/* Quick 1-Click Demo Fill for Guest & Host only on normal page */}
+      {!registering && !admin && (
+        <div className="auth-demo-bar">
+          <span className="auth-demo-title">Quick demo:</span>
+          <div className="auth-demo-chips">
+            <button
+              type="button"
+              className={`auth-demo-btn ${roleTab === 'guest' ? 'active' : ''}`}
+              onClick={() => {
+                setRoleTab('guest');
+                setEmail('claire.dubois@stayhub.dev');
+                setPassword('Password123!');
+                setError(null);
+              }}
+              title="Pre-fill Claire Dubois (Guest)"
+            >
+              Claire (Guest)
+            </button>
+            <button
+              type="button"
+              className={`auth-demo-btn ${roleTab === 'host' ? 'active' : ''}`}
+              onClick={() => {
+                setRoleTab('host');
+                setEmail('ines.costa@stayhub.dev');
+                setPassword('Password123!');
+                setError(null);
+              }}
+              title="Pre-fill Inês Costa (Host)"
+            >
+              Inês (Host)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dedicated Admin Demo button only when on /admin/login */}
+      {admin && (
+        <div className="auth-demo-bar">
+          <span className="auth-demo-title">Admin demo credentials:</span>
+          <div className="auth-demo-chips">
+            <button
+              type="button"
+              className="auth-demo-btn auth-demo-btn--admin active"
+              onClick={() => {
+                setEmail('admin@stayhub.dev');
+                setPassword('Password123!');
+                setError(null);
+              }}
+              title="Pre-fill StayHub Platform Admin"
+            >
+              Elena Rostova (Super Admin)
+            </button>
+          </div>
+        </div>
+      )}
+
       {error != null && (
         <ErrorPanel
           message={error instanceof Error ? error.message : 'Unable to sign in.'}
           requestId={error instanceof ApiError ? error.requestId : undefined}
         />
       )}
-      <form onSubmit={submit}>
+
+      <form onSubmit={submit} className="auth-main-form">
         <fieldset disabled={busy}>
           {registering && (
             <Field
@@ -116,46 +243,110 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' | 'admin' }) {
               error={fields.full_name}
             />
           )}
+
           <Field
-            label="Email"
+            label="Email address"
             id="email"
             name="email"
             required
             type="email"
             autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             error={fields.email}
+            placeholder={
+              admin
+                ? 'admin@stayhub.dev'
+                : roleTab === 'host'
+                  ? 'ines.costa@stayhub.dev'
+                  : 'claire.dubois@stayhub.dev'
+            }
           />
-          <Field
-            label="Password"
-            id="password"
-            name="password"
-            required
-            type="password"
-            autoComplete={registering ? 'new-password' : 'current-password'}
-            hint={registering ? 'At least 8 characters; maximum 72 UTF-8 bytes.' : undefined}
-            error={fields.password}
-          />
+
+          <div className="auth-password-wrapper">
+            <Field
+              label="Password"
+              id="password"
+              name="password"
+              required
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete={registering ? 'new-password' : 'current-password'}
+              hint={registering ? 'At least 8 characters; maximum 72 UTF-8 bytes.' : undefined}
+              error={fields.password}
+              placeholder="••••••••••••"
+            />
+            <button
+              type="button"
+              className="auth-password-eye"
+              onClick={() => setShowPassword(!showPassword)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              tabIndex={-1}
+            >
+              {showPassword ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              )}
+            </button>
+          </div>
+
           {registering && (
             <label className="checkbox-row">
               <input type="checkbox" name="is_host" /> I’d also like to host
             </label>
           )}
-          <Button type="submit">
-            {busy ? 'Please wait…' : registering ? 'Create account' : 'Sign in'}
+
+          <Button
+            type="submit"
+            className={`auth-submit-button ${admin ? 'auth-submit-button--admin' : ''}`}
+          >
+            {busy ? (
+              <span className="auth-btn-loading">
+                <span className="auth-spinner-sm" aria-hidden="true" />
+                <span>Authenticating…</span>
+              </span>
+            ) : registering ? (
+              'Create account'
+            ) : admin ? (
+              'Sign in to Admin Dashboard →'
+            ) : roleTab === 'host' ? (
+              'Sign in to Host Workspace →'
+            ) : (
+              'Sign in as Guest →'
+            )}
           </Button>
         </fieldset>
       </form>
-      {!admin && (
-        <p className="form-link">
-          {registering ? 'Already feel at home? ' : 'New to StayHub? '}
-          <Link to={`${registering ? '/login' : '/register'}${query}`}>
-            {registering ? 'Sign in' : 'Create an account'}
+
+      <div className="auth-links-footer">
+        {!admin && (
+          <p className="form-link">
+            {registering ? 'Already feel at home? ' : 'New to StayHub? '}
+            <Link to={`${registering ? '/login' : '/register'}${query}`}>
+              {registering ? 'Sign in' : 'Create an account'}
+            </Link>
+          </p>
+        )}
+        <div className="auth-sublinks-row">
+          <Link
+            className="text-link auth-sublink-btn"
+            to={admin ? '/login' : '/admin/login'}
+          >
+            {admin ? '← Return to Guest & Host sign in' : 'Platform administrator console →'}
           </Link>
-        </p>
-      )}
-      <Link className="text-link" to={admin ? '/login' : '/admin/login'}>
-        {admin ? 'Guest and host sign in' : 'Administrator sign in'}
-      </Link>
+          <Link className="text-link auth-sublink-btn" to="/">
+            Return home
+          </Link>
+        </div>
+      </div>
     </section>
   );
 }
@@ -239,6 +430,22 @@ export function AccountPage() {
 
   return (
     <section className="page-content account-page">
+      {/* Platform Admin Alert Banner */}
+      {!isUser && identity.subject_type === 'admin' && (
+        <div className="account-admin-banner">
+          <div className="account-admin-banner-icon" aria-hidden="true">
+            ⚡
+          </div>
+          <div className="account-admin-banner-text">
+            <strong>Administrator Account Active</strong>
+            <p>You have full privileges to manage reservations, review listing versions, and propose fee schedules.</p>
+          </div>
+          <Link to="/admin" className="button button--primary account-admin-banner-btn">
+            Open Admin Dashboard →
+          </Link>
+        </div>
+      )}
+
       {/* Hero Profile Banner */}
       <div className="account-hero-card">
         <div className="account-hero-avatar-wrap">

@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
       proxy: Object.fromEntries(
         ['/api', '/healthz'].map((path) => [
           path,
-          { target: env.API_PROXY_TARGET || 'http://localhost:8080', changeOrigin: true },
+          { target: env.API_PROXY_TARGET || 'http://localhost:8080', changeOrigin: true, ws: true },
         ]),
       ),
     },

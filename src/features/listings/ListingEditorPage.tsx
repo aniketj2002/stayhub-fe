@@ -21,26 +21,69 @@ import {
 import type { HostListing, ListingCheck, SubmitResult } from './types';
 import { toForm, toMinor, wizardPatch, type WizardForm } from './wizard';
 import { SmartSetupWizard } from './SmartSetupWizard';
+import { LocationPickerMap } from './LocationPickerMap';
+import { saveListingCoordinates } from '../search/geo';
+import { PricingRulesPanel } from '../pricing/PricingRulesPanel';
+import { DateOverrideCalendar } from '../pricing/DateOverrideCalendar';
+import { IcalPanel } from '../ical/IcalPanel';
+import { CohostPanel } from '../cohosts/CohostPanel';
 
-// Map sections from the reference UI (Image 1) to wizard steps
-export const EDITOR_SECTIONS = [
-  { id: 'photos', label: 'Photo tour', wizardStep: 3 },
-  { id: 'title', label: 'Title', wizardStep: 4 },
-  { id: 'property-type', label: 'Property type', wizardStep: 1 },
-  { id: 'pricing', label: 'Pricing', wizardStep: 5 },
-  { id: 'availability', label: 'Availability', wizardStep: 6 },
-  { id: 'guests', label: 'Guests', wizardStep: 2 },
-  { id: 'description', label: 'Description', wizardStep: 4 },
-  { id: 'amenities', label: 'Amenities', wizardStep: 2 },
-  { id: 'accessibility', label: 'Accessibility', wizardStep: 2 },
-  { id: 'location', label: 'Location', wizardStep: 1 },
-  { id: 'cohosts', label: 'Host and co-hosts', wizardStep: 1 },
-  { id: 'booking-settings', label: 'Booking settings', wizardStep: 5 },
-  { id: 'house-rules', label: 'House rules', wizardStep: 6 },
-  { id: 'guest-safety', label: 'Guest safety', wizardStep: 6 },
-  { id: 'cancellation', label: 'Cancellation policy', wizardStep: 6 },
-  { id: 'registration', label: 'Registration and taxes', wizardStep: 6 },
-] as const;
+export interface SectionItem {
+  id: string;
+  label: string;
+  icon?: string;
+  wizardStep: number;
+}
+
+export interface SectionGroup {
+  title: string;
+  sections: SectionItem[];
+}
+
+export const SECTION_GROUPS: SectionGroup[] = [
+  {
+    title: 'The space',
+    sections: [
+      { id: 'property-type', label: 'Property type', wizardStep: 1 },
+      { id: 'location', label: 'Location', wizardStep: 1 },
+      { id: 'guests', label: 'Guests', wizardStep: 2 },
+      { id: 'amenities', label: 'Amenities', wizardStep: 2 },
+      { id: 'accessibility', label: 'Accessibility', wizardStep: 2 },
+      { id: 'cohosts', label: 'Host and co-hosts', wizardStep: 1 },
+    ],
+  },
+  {
+    title: 'Listing details',
+    sections: [
+      { id: 'photos', label: 'Photo tour', wizardStep: 3 },
+      { id: 'title', label: 'Title', wizardStep: 4 },
+      { id: 'description', label: 'Description', wizardStep: 4 },
+    ],
+  },
+  {
+    title: 'Pricing & calendar',
+    sections: [
+      { id: 'pricing', label: 'Pricing', wizardStep: 5 },
+      { id: 'pricing-rules', label: 'Rules & discounts', wizardStep: 5 },
+      { id: 'date-overrides', label: 'Date overrides', wizardStep: 5 },
+      { id: 'booking-settings', label: 'Booking settings', wizardStep: 5 },
+      { id: 'availability', label: 'Availability', wizardStep: 6 },
+      { id: 'ical', label: 'iCal sync', wizardStep: 6 },
+    ],
+  },
+  {
+    title: 'Rules & Policies',
+    sections: [
+      { id: 'house-rules', label: 'House rules', wizardStep: 6 },
+      { id: 'guest-safety', label: 'Guest safety', wizardStep: 6 },
+      { id: 'cancellation', label: 'Cancellation policy', wizardStep: 6 },
+      { id: 'registration', label: 'Registration and taxes', wizardStep: 6 },
+    ],
+  },
+];
+
+// Flat export for compatibility
+export const EDITOR_SECTIONS: readonly SectionItem[] = SECTION_GROUPS.flatMap((g) => g.sections);
 
 export function ListingEditorPage() {
   const { id = '' } = useParams();
@@ -114,6 +157,17 @@ function Editor({ initial }: { initial: HostListing }) {
   const [noParties, setNoParties] = useState(true);
   const [noSmoking, setNoSmoking] = useState(true);
   const [commercialPhoto, setCommercialPhoto] = useState(false);
+  const [accessibilityFeatures, setAccessibilityFeatures] = useState<Record<string, boolean>>({
+    step_free_entrance: true,
+    step_free_path: true,
+  });
+  const [safetyFeatures, setSafetyFeatures] = useState<Record<string, boolean>>({
+    smoke_alarm: true,
+    co_alarm: true,
+    first_aid: true,
+    fire_extinguisher: true,
+  });
+  const [registrationNumber, setRegistrationNumber] = useState('');
 
   const [photos, setPhotos] = useState<Record<string, Media>>(() =>
     Object.fromEntries((original?.photos || []).map((photo) => [photo.id, photo])),
@@ -302,6 +356,9 @@ function Editor({ initial }: { initial: HostListing }) {
         photos={photos}
         onUpdate={update}
         onSaveAndExit={() => {
+          if (dirty) {
+            void save(step);
+          }
           const next = new URLSearchParams(searchParams);
           next.delete('mode');
           setSearchParams(next);
@@ -439,7 +496,7 @@ function Editor({ initial }: { initial: HostListing }) {
                 }`}
                 onClick={() => handleSectionClick(sec.id, sec.wizardStep)}
               >
-                {sec.label}
+                <span>{sec.label}</span>
               </button>
             ))}
           </div>
@@ -577,42 +634,15 @@ function Editor({ initial }: { initial: HostListing }) {
                     </div>
                   </div>
 
-                  {/* CUSTOM RULES */}
-                  <div className="editor-custom-rules-block">
-                    <span className="editor-select-label">CUSTOM RULES</span>
-
-                    <div className="editor-custom-rule-card">
-                      <span>Please take shoes off inside; the tiles scratch easily.</span>
-                      <span className="editor-rule-badge editor-rule-badge--approved">
-                        Approved
-                      </span>
-                    </div>
-
-                    <div className="editor-custom-rule-card">
-                      <div className="editor-custom-rule-with-dot">
-                        <span>No visitors after 10 pm.</span>
-                        <span className="editor-amber-dot">•</span>
-                      </div>
-                      <span className="editor-rule-badge editor-rule-badge--pending">
-                        Awaiting approval
-                      </span>
-                    </div>
-
-                    <p className="editor-custom-rules-note">
-                      Custom rules are reviewed by StayHub within 24 hours against the
-                      nondiscrimination policy.
-                    </p>
-                  </div>
-
-                  {/* Full Textarea for compatibility and editing */}
-                  <div className="field">
-                    <label htmlFor="house-rules">House rules notes</label>
+                  {/* Custom House Rules */}
+                  <div className="field" style={{ marginTop: '20px' }}>
+                    <label htmlFor="house-rules">Custom house rules</label>
                     <textarea
                       id="house-rules"
-                      rows={3}
+                      rows={4}
                       value={form.house_rules}
                       onChange={(e) => update('house_rules', e.target.value)}
-                      placeholder="Add any specific house instructions..."
+                      placeholder="Add any specific house instructions or custom guidelines for your guests..."
                     />
                   </div>
 
@@ -714,10 +744,13 @@ function Editor({ initial }: { initial: HostListing }) {
                 </div>
               )}
 
-              {/* PRICING & BOOKING SETTINGS */}
-              {(activeSection === 'pricing' || activeSection === 'booking-settings') && (
+              {/* PRICING */}
+              {activeSection === 'pricing' && (
                 <div className="editor-section-content">
-                  <h2 className="editor-section-heading">Pricing & Settings</h2>
+                  <h2 className="editor-section-heading">Pricing</h2>
+                  <p className="editor-section-sub">
+                    Set your base nightly price and one-time cleaning fee per reservation.
+                  </p>
                   <div className="form-grid">
                     {input('price', 'Nightly price (EUR)', {
                       inputMode: 'decimal',
@@ -728,28 +761,119 @@ function Editor({ initial }: { initial: HostListing }) {
                       placeholder: '0.00',
                     })}
                   </div>
-                  <label className="checkbox-row">
-                    <input
-                      type="checkbox"
-                      checked={form.instant_book}
-                      onChange={(event) => update('instant_book', event.target.checked)}
-                    />
-                    Allow instant booking
-                  </label>
-                  <p className="muted">
-                    Otherwise guests request a booking for host approval. Final quotes and fees are
-                    calculated by the server.
-                  </p>
+                  <div className="editor-info-callout" style={{ marginTop: '20px' }}>
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                    <span>
+                      Final quotes, local currency conversions, and applicable service fees are
+                      calculated automatically by the server during guest checkout.
+                    </span>
+                  </div>
                 </div>
               )}
 
-              {/* PROPERTY TYPE & LOCATION */}
-              {(activeSection === 'property-type' ||
-                activeSection === 'location' ||
-                activeSection === 'accessibility' ||
-                activeSection === 'cohosts') && (
+              {/* PRICING RULES */}
+              {activeSection === 'pricing-rules' && (
                 <div className="editor-section-content">
-                  <h2 className="editor-section-heading">Property details & Location</h2>
+                  <PricingRulesPanel
+                    listingId={detail.listing.id}
+                    basePriceMinor={
+                      detail.working_version?.base_price_minor || detail.live_version?.base_price_minor || 10000
+                    }
+                  />
+                </div>
+              )}
+
+              {/* DATE OVERRIDES */}
+              {activeSection === 'date-overrides' && (
+                <div className="editor-section-content">
+                  <DateOverrideCalendar
+                    listingId={detail.listing.id}
+                    basePriceMinor={
+                      detail.working_version?.base_price_minor || detail.live_version?.base_price_minor || 10000
+                    }
+                  />
+                </div>
+              )}
+
+              {/* BOOKING SETTINGS */}
+              {activeSection === 'booking-settings' && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">Booking settings</h2>
+                  <p className="editor-section-sub">
+                    Choose whether guests can book immediately or must request your approval first.
+                  </p>
+                  <div className="editor-feature-card" style={{ marginBottom: '16px' }}>
+                    <div className="editor-feature-text">
+                      <span className="editor-feature-title">⚡ Instant Book</span>
+                      <span className="editor-feature-desc">
+                        Guests who meet your requirements can book automatically without waiting
+                        for host review.
+                      </span>
+                    </div>
+                    <label className="checkbox-row" style={{ margin: 0 }}>
+                      <input
+                        type="checkbox"
+                        checked={form.instant_book}
+                        onChange={(event) => update('instant_book', event.target.checked)}
+                      />
+                      Allow instant booking
+                    </label>
+                  </div>
+                  <div className="editor-select-field" style={{ marginTop: '16px' }}>
+                    <label htmlFor="advance-notice" className="editor-select-label">
+                      ADVANCE NOTICE
+                    </label>
+                    <select id="advance-notice" className="editor-custom-select" defaultValue="same_day">
+                      <option value="same_day">Same day (with standard cutoff)</option>
+                      <option value="at_least_1_day">At least 1 day notice</option>
+                      <option value="at_least_2_days">At least 2 days notice</option>
+                      <option value="at_least_3_days">At least 3 days notice</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* PROPERTY TYPE */}
+              {activeSection === 'property-type' && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">Property type</h2>
+                  <p className="editor-section-sub">
+                    Choose the property type and space structure that best categorizes your home.
+                  </p>
+                  <div className="editor-property-types-grid">
+                    {[
+                      { id: 'apartment', label: 'Apartment', icon: '🏢' },
+                      { id: 'house', label: 'House', icon: '🏡' },
+                      { id: 'villa', label: 'Villa', icon: '🏰' },
+                      { id: 'cabin', label: 'Cabin', icon: '🪵' },
+                      { id: 'guesthouse', label: 'Guesthouse', icon: '🏠' },
+                      { id: 'other', label: 'Other', icon: '✨' },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={`editor-property-type-pill ${
+                          form.property_type === item.id ? 'editor-property-type-pill--active' : ''
+                        }`}
+                        onClick={() => update('property_type', item.id)}
+                      >
+                        <span className="editor-property-type-icon">{item.icon}</span>
+                        <span className="editor-property-type-label">{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
                   <div className="field">
                     <label htmlFor="property-type">Property type</label>
                     <select
@@ -770,17 +894,7 @@ function Editor({ initial }: { initial: HostListing }) {
                       <small className="field-error">{fields.property_type}</small>
                     )}
                   </div>
-                  {input('address_line1', 'Street address')}
-                  {input('address_line2', 'Apartment, unit, or building (optional)')}
-                  <div className="form-grid">
-                    {input('city', 'City')}
-                    {input('region', 'Region (optional)')}
-                    {input('country', 'Country code', {
-                      maxLength: 2,
-                      placeholder: 'PT, IN, JP',
-                    })}
-                    {input('postal_code', 'Postal code (optional)')}
-                  </div>
+
                   {input('timezone', 'Property timezone', {
                     list: 'timezones',
                     placeholder: 'Europe/Lisbon',
@@ -793,12 +907,193 @@ function Editor({ initial }: { initial: HostListing }) {
                 </div>
               )}
 
-              {/* GUESTS & AMENITIES */}
-              {(activeSection === 'guests' || activeSection === 'amenities') && (
+              {/* LOCATION & MAP */}
+              {activeSection === 'location' && (
                 <div className="editor-section-content">
-                  <h2 className="editor-section-heading">Capacity & Amenities</h2>
+                  <h2 className="editor-section-heading">Location & Map</h2>
+                  <p className="editor-section-sub">
+                    Enter the physical address of your listing and pinpoint its exact position on
+                    the map.
+                  </p>
+                  {input('address_line1', 'Street address')}
+                  {input('address_line2', 'Apartment, unit, or building (optional)')}
+                  <div className="form-grid">
+                    {input('city', 'City')}
+                    {input('region', 'Region (optional)')}
+                    {input('country', 'Country code', {
+                      maxLength: 2,
+                      placeholder: 'PT, IN, JP',
+                    })}
+                    {input('postal_code', 'Postal code (optional)')}
+                  </div>
+
+                  <div style={{ marginTop: '20px' }}>
+                    <LocationPickerMap
+                      listingId={detail.listing.id}
+                      city={form.city}
+                      country={form.country}
+                      address={form.address_line1}
+                      onChange={(lat, lng) => {
+                        setDirty(true);
+                        saveListingCoordinates(detail.listing.id, [lat, lng]);
+                      }}
+                    />
+                  </div>
+
+                  <div className="editor-info-callout" style={{ marginTop: '16px' }}>
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                    <span>
+                      <strong>Guest Privacy:</strong> We show an approximate ~350m radius to
+                      prospective guests while browsing. Your exact address and pin are only shared
+                      after a booking is confirmed.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* ACCESSIBILITY FEATURES */}
+              {activeSection === 'accessibility' && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">Accessibility features</h2>
+                  <p className="editor-section-sub">
+                    Highlight features that help guests with disabilities or mobility needs
+                    navigate your space.
+                  </p>
+                  <div className="editor-card-list">
+                    {[
+                      {
+                        id: 'step_free_entrance',
+                        title: 'Step-free guest entrance',
+                        desc: 'There are no steps or stairs to reach the entrance doorway.',
+                        icon: '🚪',
+                      },
+                      {
+                        id: 'wide_doorway',
+                        title: 'Wide entrance doorway',
+                        desc: 'The front entrance is at least 32 inches (81 cm) wide.',
+                        icon: '📐',
+                      },
+                      {
+                        id: 'step_free_path',
+                        title: 'Step-free path to entrance',
+                        desc: 'The walkway, driveway, or hallway to your door is flat and smooth.',
+                        icon: '🚶',
+                      },
+                      {
+                        id: 'accessible_parking',
+                        title: 'Accessible parking spot',
+                        desc: 'A designated wide parking space within 100 feet of your entrance.',
+                        icon: '♿',
+                      },
+                      {
+                        id: 'step_free_shower',
+                        title: 'Step-free shower with grab bar',
+                        desc: 'A roll-in or walk-in shower without a threshold curb or tub edge.',
+                        icon: '🚿',
+                      },
+                    ].map((item) => (
+                      <label
+                        key={item.id}
+                        className="editor-feature-card"
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <div className="editor-feature-text">
+                          <span className="editor-feature-title">
+                            <span style={{ marginRight: '8px' }}>{item.icon}</span>
+                            {item.title}
+                          </span>
+                          <span className="editor-feature-desc">{item.desc}</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={!!accessibilityFeatures[item.id]}
+                          onChange={(e) => {
+                            setAccessibilityFeatures((prev) => ({
+                              ...prev,
+                              [item.id]: e.target.checked,
+                            }));
+                            setDirty(true);
+                          }}
+                        />
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="editor-info-callout">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                    <span>
+                      Photos of accessibility features may be reviewed by the StayHub team before
+                      appearing with the verified accessibility badge on your listing.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* CO-HOSTS */}
+              {activeSection === 'cohosts' && (
+                <div className="editor-section-content">
+                  <CohostPanel listingId={detail.listing.id} />
+                </div>
+              )}
+
+              {/* NUMBER OF GUESTS */}
+              {activeSection === 'guests' && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">Number of guests</h2>
+                  <p className="editor-section-sub">
+                    Specify how many guests can comfortably stay in your property.
+                  </p>
                   {input('max_guests', 'Maximum guests', { type: 'number', min: 1, step: 1 })}
-                  <h3>What does your space offer?</h3>
+                  <div className="editor-info-callout" style={{ marginTop: '20px' }}>
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                    <span>
+                      Make sure you have enough beds, linens, and safety equipment for this guest
+                      count. Exceeding local building occupancy codes may violate city ordinances.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* AMENITIES */}
+              {activeSection === 'amenities' && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">Amenities</h2>
+                  <p className="editor-section-sub">
+                    Select all the features and comforts available to guests staying in your home.
+                  </p>
                   {amenities.isPending ? (
                     <Skeleton label="Loading amenities" />
                   ) : amenities.isError ? (
@@ -830,13 +1125,85 @@ function Editor({ initial }: { initial: HostListing }) {
                 </div>
               )}
 
-              {/* AVAILABILITY / CANCELLATION POLICY / GUEST SAFETY / REGISTRATION */}
-              {(activeSection === 'availability' ||
-                activeSection === 'cancellation' ||
-                activeSection === 'guest-safety' ||
-                activeSection === 'registration') && (
+              {/* GUEST SAFETY */}
+              {activeSection === 'guest-safety' && (
                 <div className="editor-section-content">
-                  <h2 className="editor-section-heading">Policies & Availability</h2>
+                  <h2 className="editor-section-heading">Guest safety</h2>
+                  <p className="editor-section-sub">
+                    Keep your space compliant and ensure guests are prepared for any unexpected
+                    situation.
+                  </p>
+                  <div className="editor-rules-toggle-list">
+                    {[
+                      {
+                        id: 'smoke_alarm',
+                        title: 'Smoke alarm',
+                        desc: 'Installed in hallways and bedrooms, tested regularly.',
+                        icon: '🚨',
+                      },
+                      {
+                        id: 'co_alarm',
+                        title: 'Carbon monoxide alarm',
+                        desc: 'Present near fuel-burning appliances or attached garages.',
+                        icon: '💨',
+                      },
+                      {
+                        id: 'first_aid',
+                        title: 'First aid kit',
+                        desc: 'Equipped with bandages, disinfectant, and emergency supplies.',
+                        icon: '🩹',
+                      },
+                      {
+                        id: 'fire_extinguisher',
+                        title: 'Fire extinguisher',
+                        desc: 'Accessible in the kitchen or near common exit paths.',
+                        icon: '🧯',
+                      },
+                    ].map((item) => (
+                      <div key={item.id} className="editor-rule-row">
+                        <div className="editor-rule-info">
+                          <span className="editor-rule-icon">{item.icon}</span>
+                          <div>
+                            <span className="editor-rule-name">{item.title}</span>
+                            <span
+                              style={{
+                                display: 'block',
+                                fontSize: '12px',
+                                color: '#6b7280',
+                                marginTop: '2px',
+                              }}
+                            >
+                              {item.desc}
+                            </span>
+                          </div>
+                        </div>
+                        <label className="editor-toggle-switch">
+                          <input
+                            type="checkbox"
+                            checked={safetyFeatures[item.id] ?? true}
+                            onChange={(e) => {
+                              setSafetyFeatures((prev) => ({
+                                ...prev,
+                                [item.id]: e.target.checked,
+                              }));
+                              setDirty(true);
+                            }}
+                          />
+                          <span className="editor-toggle-slider" />
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* CANCELLATION POLICY */}
+              {activeSection === 'cancellation' && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">Cancellation policy</h2>
+                  <p className="editor-section-sub">
+                    Choose the cancellation terms that apply when a guest cancels their reservation.
+                  </p>
                   {policies.isPending ? (
                     <Skeleton label="Loading cancellation policies" />
                   ) : policies.isError ? (
@@ -865,14 +1232,73 @@ function Editor({ initial }: { initial: HostListing }) {
                       </p>
                     </div>
                   )}
+                </div>
+              )}
 
+              {/* AVAILABILITY & CALENDAR */}
+              {activeSection === 'availability' && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">Availability & calendar</h2>
+                  <p className="editor-section-sub">
+                    Block dates, adjust individual night rates, and synchronize your schedule.
+                  </p>
                   <div className="editor-cal-link-box">
+                    <div>
+                      <h3
+                        style={{
+                          margin: '0 0 4px',
+                          fontSize: '15px',
+                          fontWeight: 700,
+                          color: '#1e293b',
+                        }}
+                      >
+                        Interactive Host Calendar
+                      </h3>
+                      <p>
+                        Manage individual nights, set custom weekend rates, or block dates for
+                        maintenance.
+                      </p>
+                    </div>
                     <Link
                       className="editor-btn-secondary"
                       to={`/host/listings/${detail.listing.id}/calendar`}
                     >
                       Open Availability Calendar ↗
                     </Link>
+                  </div>
+                </div>
+              )}
+
+              {/* ICAL SYNC */}
+              {activeSection === 'ical' && (
+                <div className="editor-section-content">
+                  <IcalPanel listingId={detail.listing.id} />
+                </div>
+              )}
+
+              {/* REGULATIONS & LICENSES */}
+              {activeSection === 'registration' && (
+                <div className="editor-section-content">
+                  <h2 className="editor-section-heading">Regulations & licenses</h2>
+                  <p className="editor-section-sub">
+                    Add your local municipal registration, permit license, or tax identifier.
+                  </p>
+                  <div className="field">
+                    <label htmlFor="listing-license">Registration or permit number</label>
+                    <input
+                      id="listing-license"
+                      type="text"
+                      placeholder="e.g. 12345/AL or RNAL-9876"
+                      value={registrationNumber}
+                      onChange={(e) => {
+                        setRegistrationNumber(e.target.value);
+                        setDirty(true);
+                      }}
+                    />
+                    <small className="muted" style={{ display: 'block', marginTop: '4px' }}>
+                      In many jurisdictions, displaying your municipal license or registration number
+                      is mandatory to operate a short-term rental.
+                    </small>
                   </div>
                 </div>
               )}
@@ -1028,12 +1454,17 @@ function Editor({ initial }: { initial: HostListing }) {
                   <div className="preview-section-block">
                     <h4 className="preview-section-title">House rules</h4>
                     <div className="preview-rules-list">
-                      <p>Check-in 3 – 10 pm · Checkout 11 am</p>
-                      <p>{form.max_guests} guests maximum · No pets</p>
+                      <p>
+                        Check-in {form.check_in_time || '3:00 pm'} · Checkout{' '}
+                        {form.check_out_time || '11:00 am'}
+                      </p>
+                      <p>
+                        {form.max_guests} guests maximum · {petsAllowed ? 'Pets allowed' : 'No pets'}
+                      </p>
                       {quietHours && <p>Quiet hours 11 pm – 8 am</p>}
                       {noParties && <p>No parties or events</p>}
                       {noSmoking && <p>No smoking on the terrace</p>}
-                      <p>Shoes off inside</p>
+                      {form.house_rules && <p>{form.house_rules}</p>}
                     </div>
                   </div>
 
@@ -1043,10 +1474,22 @@ function Editor({ initial }: { initial: HostListing }) {
                   <div className="preview-section-block">
                     <h4 className="preview-section-title">Amenities</h4>
                     <div className="preview-amenities-2col">
-                      <div className="preview-amenity-item">Wifi · 480 Mbps</div>
-                      <div className="preview-amenity-item">Kitchen</div>
-                      <div className="preview-amenity-item">Air conditioning</div>
-                      <div className="preview-amenity-item">Bathtub</div>
+                      {form.amenities.length > 0 ? (
+                        form.amenities.slice(0, 6).map((code) => {
+                          const label =
+                            amenities.data?.amenities?.find((a) => a.code === code)?.label ||
+                            code;
+                          return (
+                            <div key={code} className="preview-amenity-item">
+                              {label}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="preview-amenity-item" style={{ color: '#9ca3af' }}>
+                          No amenities selected
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>

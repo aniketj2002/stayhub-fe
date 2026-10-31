@@ -66,7 +66,41 @@ export function TripsPage() {
                 />
               )}
               <div>
-                <ReservationBadge status={detail.reservation.status} />
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '4px' }}>
+                  <ReservationBadge status={detail.reservation.status} />
+                  {detail.reservation.status === 'reviewed' && (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: '2px 8px',
+                        borderRadius: '9999px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        background: '#ecfdf5',
+                        color: '#065f46',
+                      }}
+                    >
+                      Reviewed ★
+                    </span>
+                  )}
+                  {detail.reservation.status === 'completed' && (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: '2px 8px',
+                        borderRadius: '9999px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        background: '#fffbeb',
+                        color: '#92400e',
+                      }}
+                    >
+                      Review Pending
+                    </span>
+                  )}
+                </div>
                 <h2>{detail.listing.title}</h2>
                 <p>
                   {detail.listing.city}, {detail.listing.country}
@@ -76,7 +110,17 @@ export function TripsPage() {
                   {formatMoney(detail.reservation.guest_total_minor, detail.reservation.currency)} ·{' '}
                   {detail.reservation.code}
                 </p>
-                <span className="text-link">View stay ↗</span>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
+                  <span className="text-link">View stay ↗</span>
+                  <Link
+                    to={`/trips/${detail.reservation.id}/itinerary`}
+                    className="text-link"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ fontWeight: 600 }}
+                  >
+                    🗺️ Itinerary
+                  </Link>
+                </div>
               </div>
             </Link>
           ))}
