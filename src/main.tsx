@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from 'react-router-dom';
 import { router } from './app/router';
 import { ApiError } from './lib/api';
+import 'leaflet/dist/leaflet.css';
 import './styles.css';
 
 const queryClient = new QueryClient({

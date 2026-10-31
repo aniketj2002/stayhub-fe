@@ -9,6 +9,7 @@ import type { PublicListing } from '../listings/types';
 import { addDays, dateRangeError, nightsInRange, shiftMonth } from '../calendar/dates';
 import { useSession } from '../auth/session';
 import { PaymentScreen } from '../reservations/PaymentScreen';
+import { ListingLocationMap } from './ListingLocationMap';
 
 // NOTE: Standout highlights (location rating %, guest favorite ranking) are computed/fallback UI components
 // to match the reference design until backend provides structured listing highlights.
@@ -584,32 +585,7 @@ function ListingDetail({ listing }: { listing: PublicListing }) {
               <div className="where-block">
                 <h3 className="policy-title">Where you'll be</h3>
                 <div className="location-map-preview">
-                  <svg className="map-preview-svg" viewBox="0 0 400 200" preserveAspectRatio="none">
-                    <rect width="400" height="200" fill="#f4f4f2" />
-                    <path d="M 220 200 Q 300 140, 400 90 L 400 200 Z" fill="#e2eff1" />
-                    <line x1="50" y1="0" x2="120" y2="200" stroke="#fff" strokeWidth="4" />
-                    <line x1="180" y1="0" x2="240" y2="200" stroke="#fff" strokeWidth="4" />
-                    <line x1="0" y1="70" x2="400" y2="90" stroke="#fff" strokeWidth="4" />
-                    <line x1="0" y1="140" x2="400" y2="150" stroke="#fff" strokeWidth="4" />
-                    <text x="60" y="80" fill="#9ca3af" fontSize="12" fontWeight="600">
-                      Alfama
-                    </text>
-                    <text x="280" y="50" fill="#9ca3af" fontSize="12" fontWeight="600">
-                      Graça
-                    </text>
-                    <circle cx="200" cy="100" r="16" fill="#0b6b5d" opacity="0.2" />
-                    <circle cx="200" cy="100" r="10" fill="#0b6b5d" />
-                    <text
-                      x="200"
-                      y="104"
-                      fill="#fff"
-                      fontSize="10"
-                      textAnchor="middle"
-                      fontWeight="bold"
-                    >
-                      ⌂
-                    </text>
-                  </svg>
+                  <ListingLocationMap listing={listing} />
                 </div>
                 <p className="location-desc-text">
                   {listing.city}, {listing.country}. Cobbled lanes, fado houses, and the Tagus 6
