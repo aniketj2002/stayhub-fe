@@ -5,6 +5,7 @@ import { Skeleton } from '../../components/ui';
 import { RequestError } from '../../components/RequestError';
 import { formatStayDate } from '../../lib/format';
 import { hostListings, listingKeys } from '../listings/api';
+import { useHostDateChangeRequests } from '../trips/api';
 import { getEarnings, getToday, reservationKeys } from './api';
 import { HostActions } from './HostActions';
 import { Deadline, ReservationBadge } from './ReservationBits';
@@ -26,6 +27,9 @@ export function HostTodayPage() {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
   };
+
+  const dateChanges = useHostDateChangeRequests();
+  const pendingDateChanges = dateChanges.data?.alterations ?? [];
 
   const query = useQuery({
     queryKey: reservationKeys.today,
@@ -157,6 +161,40 @@ export function HostTodayPage() {
       )}
 
       {/* Yellow Alert Banner for real pending requests from DB */}
+      {pendingDateChanges.length > 0 && (
+        <div className="host-alert-banner">
+          <div className="host-alert-left">
+            <div className="host-alert-clock-circle" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            </div>
+            <div className="host-alert-text">
+              <strong className="host-alert-headline">
+                {pendingDateChanges.length} date change request(s) need your approval
+              </strong>
+              <p className="host-alert-subtext">
+                {pendingDateChanges
+                  .map((change) => {
+                    const stay = change.reservation_code || 'Reservation';
+                    const listing = change.listing_title ? ` · ${change.listing_title}` : '';
+                    return `${stay}${listing} · ${change.current_check_in} – ${change.current_check_out} → ${change.new_check_in} – ${change.new_check_out}`;
+                  })
+                  .join(' · ')}
+              </p>
+            </div>
+          </div>
+          <Link
+            className="host-alert-review-btn"
+            style={{ textDecoration: 'none' }}
+            to={`/host/reservations/${pendingDateChanges[0].reservation_id}?review=dates`}
+          >
+            Review request
+          </Link>
+        </div>
+      )}
+
       {pendingRequests.length > 0 && (
         <div className="host-alert-banner">
           <div className="host-alert-left">

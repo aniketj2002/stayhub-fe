@@ -10,6 +10,8 @@ import { addDays, dateRangeError, nightsInRange, shiftMonth } from '../calendar/
 import { useSession } from '../auth/session';
 import { PaymentScreen } from '../reservations/PaymentScreen';
 import { ListingLocationMap } from './ListingLocationMap';
+import { ReviewsList } from '../reviews/ReviewsList';
+import { useListingReviews } from '../reviews/api';
 
 // NOTE: Standout highlights (location rating %, guest favorite ranking) are computed/fallback UI components
 // to match the reference design until backend provides structured listing highlights.
@@ -30,45 +32,6 @@ const FALLBACK_GALLERY_PHOTOS = [
   'https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=800&q=80',
   'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=800&q=80',
   'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=800&q=80',
-];
-
-const DUMMY_REVIEWS = [
-  {
-    id: 'rev-1',
-    author: 'Rui',
-    city: 'Porto',
-    avatar: 'RB',
-    date: 'Sep 2026',
-    rating: 5,
-    text: 'Exactly as photographed. The terrace at sunset is the reason to book. Steep stairs, as noted.',
-  },
-  {
-    id: 'rev-2',
-    author: 'Sven',
-    city: 'Helsinki',
-    avatar: 'SA',
-    date: 'Sep 2026',
-    rating: 5,
-    text: 'Marisol replied within minutes every time. Quiet street at night despite being in Alfama.',
-  },
-  {
-    id: 'rev-3',
-    author: 'Nadia',
-    city: 'Beirut',
-    avatar: 'NH',
-    date: 'Aug 2026',
-    rating: 5,
-    text: 'Beautiful tiles and a real kitchen. The fan is loud on hot nights; bring earplugs in August.',
-  },
-  {
-    id: 'rev-4',
-    author: 'Kai',
-    city: 'Berlin',
-    avatar: 'KL',
-    date: 'Aug 2026',
-    rating: 5,
-    text: 'Great location for fado bars. Check-in via lockbox was seamless.',
-  },
 ];
 
 export function ListingDetailPage() {
@@ -102,7 +65,9 @@ export function ListingDetailPage() {
 function ListingDetail({ listing }: { listing: PublicListing }) {
   const session = useSession();
   const [params, setParams] = useSearchParams();
-  const [reserving, setReserving] = useState(params.get('reserve') === '1');
+  const isUserLoggedIn = session.identity?.subject_type === 'user';
+  const [reserving, setReserving] = useState(isUserLoggedIn && params.get('reserve') === '1');
+  const [showLoginPrompt, setShowLoginPrompt] = useState(!isUserLoggedIn && params.get('reserve') === '1');
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
@@ -173,8 +138,12 @@ function ListingDetail({ listing }: { listing: PublicListing }) {
     .toUpperCase()
     .slice(0, 2);
 
-  const ratingDisplay = listing.rating != null ? listing.rating.toFixed(2) : '4.96';
-  const reviewCountDisplay = 212;
+  const reviewsQuery = useListingReviews(listing.id);
+  const reviewCount = reviewsQuery.data?.review_count ?? 0;
+  const ratingAvg = reviewsQuery.data?.rating_avg ?? (listing.rating ?? null);
+  const ratingDisplay =
+    ratingAvg != null ? ratingAvg.toFixed(2) : listing.rating != null ? listing.rating.toFixed(2) : '4.96';
+  const reviewCountDisplay = reviewCount > 0 ? reviewCount : 212;
 
   return (
     <div className="listing-detail-shell">
@@ -464,66 +433,8 @@ function ListingDetail({ listing }: { listing: PublicListing }) {
             )}
           </section>
 
-          {/* Reviews Section (Screen 07) */}
-          <section className="reviews-section">
-            <div className="reviews-big-heading">
-              <span className="star-char">★</span>
-              <span className="big-rating">{ratingDisplay}</span>
-              <span className="rating-sub-tag">Overall rating</span>
-              <span className="meta-separator">·</span>
-              <span className="rating-reviews-count">{reviewCountDisplay} reviews</span>
-              <span className="meta-separator">·</span>
-              <span className="rating-badge-tag">Guest favorite</span>
-            </div>
-
-            {/* Category Sub-ratings */}
-            <div className="category-scores-grid">
-              {[
-                { label: 'Cleanliness', score: '5.0' },
-                { label: 'Accuracy', score: '5.0' },
-                { label: 'Check-in', score: '5.0' },
-                { label: 'Communication', score: '5.0' },
-                { label: 'Location', score: '4.9' },
-                { label: 'Value', score: '4.9' },
-              ].map((cat) => (
-                <div key={cat.label} className="category-score-cell">
-                  <span className="cat-score-label">{cat.label}</span>
-                  <span className="cat-score-val">{cat.score}</span>
-                  <div className="cat-score-bar" aria-hidden="true">
-                    <div
-                      className="cat-score-fill"
-                      style={{ width: `${(Number(cat.score) / 5) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* 2x2 Reviews Cards Grid */}
-            <div className="reviews-cards-grid">
-              {DUMMY_REVIEWS.map((rev) => (
-                <article key={rev.id} className="review-card">
-                  <div className="review-author-row">
-                    <span className="review-avatar" aria-hidden="true">
-                      {rev.avatar}
-                    </span>
-                    <div>
-                      <h4 className="review-author-name">
-                        {rev.author} · {rev.city}
-                      </h4>
-                      <span className="review-date-text">{rev.date}</span>
-                    </div>
-                  </div>
-                  <div className="review-stars-row">★★★★★</div>
-                  <p className="review-text-body">{rev.text}</p>
-                </article>
-              ))}
-            </div>
-
-            <Button variant="secondary" className="show-all-reviews-btn">
-              Show all {reviewCountDisplay} reviews
-            </Button>
-          </section>
+          {/* Reviews Section */}
+          <ReviewsList listingId={listing.id} initialSummary={reviewsQuery.data} />
 
           {/* Policies & Location Section (Screen 07) */}
           <section className="policies-location-section">
@@ -636,7 +547,13 @@ function ListingDetail({ listing }: { listing: PublicListing }) {
             checkIn={checkIn}
             checkOut={checkOut}
             onUpdateDates={handleUpdateDates}
-            onReserve={() => setReserving(true)}
+            onReserve={() => {
+              if (session.identity?.subject_type === 'user') {
+                setReserving(true);
+              } else {
+                setShowLoginPrompt(true);
+              }
+            }}
           />
 
           {/* Availability Calendar Card - ALWAYS VISIBLE AT BOTTOM (Screen 07) */}
@@ -652,8 +569,8 @@ function ListingDetail({ listing }: { listing: PublicListing }) {
         </div>
       </div>
 
-      {/* Reservation Payment Screens at reservation time */}
-      {reserving && (
+      {/* Reservation Payment Screens at reservation time (only when user session is active) */}
+      {reserving && session.identity?.subject_type === 'user' && (
         <PaymentScreen
           id={listing.id}
           params={
@@ -663,14 +580,71 @@ function ListingDetail({ listing }: { listing: PublicListing }) {
               guests: String(params.get('guests') || '1'),
             })
           }
-          userId={
-            session.identity?.subject_type === 'user' ? session.identity.user.id : 'demo-guest'
-          }
+          userId={session.identity.user.id}
           listing={listing}
           isModal
           onClose={() => setReserving(false)}
           onEditDatesOrGuests={() => setReserving(false)}
         />
+      )}
+
+      {/* Login Prompt Dialog when unauthenticated user attempts to Reserve */}
+      {showLoginPrompt && (
+        <Dialog
+          open={showLoginPrompt}
+          title="Sign in to reserve"
+          onClose={() => setShowLoginPrompt(false)}
+        >
+          <div className="login-prompt-dialog-body">
+            <div className="login-prompt-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2.1L1 12h3v9h6v-6h4v6h6v-9h3L12 2.1zm0 3.7l6 5.4V19h-2v-6H8v6H6v-7.8l6-5.4z" />
+              </svg>
+            </div>
+            <div className="login-prompt-content">
+              <p className="eyebrow">STAYHUB RESERVATIONS</p>
+              <h3 className="login-prompt-headline">You need to sign in to book</h3>
+              <p className="login-prompt-message">
+                {session.identity?.subject_type === 'admin'
+                  ? 'You are currently signed in with a Platform Administrator account. Stays can only be reserved using a traveler guest account.'
+                  : 'A StayHub guest account is required to reserve this stay and process your booking. Sign in or create an account to pick up right where you left off.'}
+              </p>
+
+              <div className="login-prompt-summary">
+                <div className="login-prompt-summary-title">{listing.title}</div>
+                <div className="login-prompt-summary-meta">
+                  <span>{checkIn && checkOut ? `${checkIn} – ${checkOut}` : 'Dates selected'}</span>
+                  <span>·</span>
+                  <span>{params.get('guests') || '1'} guest{params.get('guests') === '1' ? '' : 's'}</span>
+                </div>
+              </div>
+
+              <div className="login-prompt-actions">
+                <Link
+                  to={`/login?returnTo=${encodeURIComponent(`/checkout/${listing.id}?check_in=${checkIn}&check_out=${checkOut}&guests=${params.get('guests') || '1'}`)}`}
+                  className="button button--primary login-prompt-main-btn"
+                  onClick={() => setShowLoginPrompt(false)}
+                >
+                  Sign in to continue
+                </Link>
+                <Link
+                  to={`/register?returnTo=${encodeURIComponent(`/checkout/${listing.id}?check_in=${checkIn}&check_out=${checkOut}&guests=${params.get('guests') || '1'}`)}`}
+                  className="button button--secondary login-prompt-sec-btn"
+                  onClick={() => setShowLoginPrompt(false)}
+                >
+                  Create an account
+                </Link>
+                <button
+                  type="button"
+                  className="button button--ghost login-prompt-cancel-btn"
+                  onClick={() => setShowLoginPrompt(false)}
+                >
+                  Continue exploring
+                </button>
+              </div>
+            </div>
+          </div>
+        </Dialog>
       )}
     </div>
   );
@@ -1299,6 +1273,16 @@ function QuotePanel({
               {formatMoney(breakdown.nightly_total_minor, current.currency)}
             </span>
           </li>
+          {breakdown.discount_minor != null && breakdown.discount_minor > 0 && (
+            <li className="breakdown-row breakdown-row--discount" style={{ color: '#059669' }}>
+              <span className="breakdown-label">
+                {breakdown.discount_kind ? `${breakdown.discount_kind} discount` : 'Special discount'}
+              </span>
+              <span className="breakdown-value">
+                -{formatMoney(breakdown.discount_minor, current.currency)}
+              </span>
+            </li>
+          )}
           <li className="breakdown-row">
             <span className="breakdown-label">Cleaning fee</span>
             <span className="breakdown-value">

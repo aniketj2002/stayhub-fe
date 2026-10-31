@@ -9,10 +9,19 @@ export interface User {
   created_at?: string;
   updated_at?: string;
 }
+export type AdminRole =
+  | 'support_l1'
+  | 'support_l2'
+  | 'trust_safety'
+  | 'finance'
+  | 'catalog_manager'
+  | 'super_admin';
+
 export interface Admin {
   id: string;
   email: string;
   full_name: string;
+  role?: AdminRole | string;
   created_at?: string;
 }
 export type Identity =

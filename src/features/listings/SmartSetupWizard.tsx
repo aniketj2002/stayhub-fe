@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../../components/ui';
 import type { WizardForm } from './wizard';
 import type { Media } from '../media/api';
@@ -47,6 +47,18 @@ export function SmartSetupWizard({
 }: SmartSetupWizardProps) {
   const [suggestionIdx, setSuggestionIdx] = useState(0);
   const [currentStep, setCurrentStep] = useState(2); // Step 2: Make it stand out (as in Image 2)
+
+  useEffect(() => {
+    if (!form.title) {
+      onUpdate('title', SUGGESTIONS[0].title);
+    }
+    if (!form.description) {
+      onUpdate('description', SUGGESTIONS[0].desc);
+    }
+    if (!form.max_guests) {
+      onUpdate('max_guests', '3');
+    }
+  }, []);
 
   // Property basics steppers state
   // NOTE: bedrooms, beds, and bathrooms counts are not yet stored separately in backend ListingVersion.
@@ -135,7 +147,15 @@ export function SmartSetupWizard({
                   <img src={src} alt={`Draft listing photo ${i + 1}`} />
                 </div>
               ))}
-              <div className="smart-photo-cell smart-photo-cell--add">
+              <div
+                className="smart-photo-cell smart-photo-cell--add"
+                role="button"
+                tabIndex={0}
+                onClick={onNext}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') onNext();
+                }}
+              >
                 <svg
                   width="20"
                   height="20"

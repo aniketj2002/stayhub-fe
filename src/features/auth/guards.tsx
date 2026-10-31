@@ -2,6 +2,34 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Button, EmptyState, ErrorPanel, Skeleton } from '../../components/ui';
 import { becomeHost, expireSession, restoreSession, useSession } from './session';
 import { useState, type ReactNode } from 'react';
+import { hasAdminPermission, type AdminPermission } from './adminPermissions';
+
+export function RequireAdminPermission({
+  permission,
+  children,
+  fallback,
+}: {
+  permission: AdminPermission;
+  children: ReactNode;
+  fallback?: ReactNode;
+}) {
+  const session = useSession('admin');
+  const admin = session.identity?.subject_type === 'admin' ? session.identity.admin : null;
+  const allowed = admin ? hasAdminPermission(admin, permission) : false;
+
+  if (!allowed) {
+    if (fallback !== undefined) return <>{fallback}</>;
+    return (
+      <div className="page-content">
+        <EmptyState title="Permission Required">
+          You do not have the required permission ({permission}) to access this view.
+        </EmptyState>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
 
 export function RequireSession({
   role,
@@ -10,7 +38,8 @@ export function RequireSession({
   role?: 'user' | 'admin' | 'host';
   children?: ReactNode;
 }) {
-  const session = useSession();
+  const session = useSession(role === 'admin' ? 'admin' : 'user');
+  const otherSession = useSession(role === 'admin' ? 'user' : 'admin');
   const location = useLocation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -28,18 +57,28 @@ export function RequireSession({
           message={session.error || 'Try again.'}
           onRetry={() => void restoreSession()}
         />
-        <Button variant="ghost" onClick={expireSession}>
+        <Button variant="ghost" onClick={() => expireSession()}>
           Continue signed out
         </Button>
       </div>
     );
-  if (!session.identity)
+  if (!session.identity) {
+    if (otherSession.identity) {
+      return (
+        <div className="page-content">
+          <EmptyState title="This area uses a different account">
+            Sign out from your account page, then sign in with the appropriate account.
+          </EmptyState>
+        </div>
+      );
+    }
     return (
       <Navigate
         replace
         to={`${role === 'admin' ? '/admin/login' : '/login'}?returnTo=${encodeURIComponent(location.pathname + location.search)}`}
       />
     );
+  }
   if (
     (role === 'admin' && session.identity.subject_type !== 'admin') ||
     (role && role !== 'admin' && session.identity.subject_type !== 'user')

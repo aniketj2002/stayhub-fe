@@ -69,6 +69,8 @@ export interface HostSummary {
   currency: string;
   cover_photo_url?: string;
   wizard_step: number;
+  rating_avg?: number;
+  review_count?: number;
   host_access: ListingAccess;
 }
 export interface SubmitResult {
@@ -152,6 +154,10 @@ export interface Quote {
     guest_fee_bps: number;
     guest_fee_minor: number;
     guest_total_minor: number;
+    discount_minor?: number;
+    discount_kind?: string;
+    subtotal_minor?: number;
+    night_count?: number;
   };
   cancellation_policy: Policy;
   refund_milestones:

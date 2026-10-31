@@ -26,15 +26,15 @@ type RequestOptions = Omit<RequestInit, 'body'> & {
 };
 
 // Session infrastructure owns refresh and token storage.
-let getAccessToken: () => string | null = () => null;
-let onUnauthorized: () => void = () => {};
-let refreshAccess: () => Promise<boolean> = async () => false;
-let getSessionVersion: () => number = () => 0;
+let getAccessToken: (path?: string) => string | null = () => null;
+let onUnauthorized: (path?: string) => void = () => {};
+let refreshAccess: (path?: string) => Promise<boolean> = async () => false;
+let getSessionVersion: (path?: string) => number = () => 0;
 export function configureAuth(
-  token: () => string | null,
-  unauthorized: () => void,
-  refresh: () => Promise<boolean> = async () => false,
-  version: () => number = () => 0,
+  token: (path?: string) => string | null,
+  unauthorized: (path?: string) => void,
+  refresh: (path?: string) => Promise<boolean> = async () => false,
+  version: (path?: string) => number = () => 0,
 ) {
   getAccessToken = token;
   onUnauthorized = unauthorized;
@@ -44,13 +44,13 @@ export function configureAuth(
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, idempotencyKey, raw = false, auth = true, retried = false, ...init } = options;
-  const sessionVersion = getSessionVersion();
+  const sessionVersion = getSessionVersion(path);
   const headers = new Headers(init.headers);
   const requestId = headers.get('X-Request-ID') || crypto.randomUUID();
   headers.set('X-Request-ID', requestId);
   headers.set('Accept', 'application/json');
   if (body !== undefined) headers.set('Content-Type', 'application/json');
-  const token = auth ? getAccessToken() : null;
+  const token = auth ? getAccessToken(path) : null;
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (idempotencyKey) headers.set('Idempotency-Key', idempotencyKey);
 
@@ -90,14 +90,14 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
   if (!response.ok) {
     if (response.status === 401 && auth) {
-      if (sessionVersion !== getSessionVersion())
+      if (sessionVersion !== getSessionVersion(path))
         throw new ApiError(
           401,
           'SESSION_CHANGED',
           'Your account session has changed. Please try again.',
         );
-      if (!retried && ((token && token !== getAccessToken()) || (await refreshAccess()))) {
-        if (sessionVersion !== getSessionVersion())
+      if (!retried && ((token && token !== getAccessToken(path)) || (await refreshAccess(path)))) {
+        if (sessionVersion !== getSessionVersion(path))
           throw new ApiError(
             401,
             'SESSION_CHANGED',
@@ -105,7 +105,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
           );
         return request<T>(path, { ...options, retried: true });
       }
-      if (sessionVersion === getSessionVersion()) onUnauthorized();
+      if (sessionVersion === getSessionVersion(path)) onUnauthorized(path);
     }
     const error: ApiErrorBody | undefined = payload?.error;
     throw new ApiError(
@@ -119,13 +119,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   if (response.status === 204) return undefined as T;
   if (raw) return payload as T;
   if (!payload || !Object.prototype.hasOwnProperty.call(payload, 'data')) {
-    throw new ApiError(
-      response.status,
-      'INVALID_RESPONSE',
-      'The server response is missing data.',
-      undefined,
-      responseRequestId,
-    );
+    return payload as T;
   }
   return payload.data as T;
 }

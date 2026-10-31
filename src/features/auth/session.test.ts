@@ -144,7 +144,8 @@ describe('session lifecycle', () => {
     expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Authorization')).toBe(
       'Bearer admin-access',
     );
-    expect(saved.get('stayhub.session.v1')).toBe('admin-refresh');
+    expect(saved.get('stayhub.admin_session.v1')).toBe('admin-refresh');
+    expect(saved.get('stayhub.session.v1')).toBeUndefined();
   });
 });
 

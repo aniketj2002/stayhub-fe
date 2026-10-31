@@ -1,3 +1,4 @@
+import { createBrowserRouter } from 'react-router-dom';
 import { CheckoutPage } from '../features/reservations/CheckoutPage';
 import { TripsPage } from '../features/reservations/TripsPage';
 import { ReservationPage } from '../features/reservations/ReservationPage';
@@ -9,10 +10,14 @@ import { ListingEditorPage } from '../features/listings/ListingEditorPage';
 import { HostCalendarPage } from '../features/calendar/HostCalendarPage';
 import { SearchPage } from '../features/search/SearchPage';
 import { ListingDetailPage } from '../features/search/ListingDetailPage';
-import { createBrowserRouter } from 'react-router-dom';
+import { AcceptInvitationPage } from '../features/cohosts/AcceptInvitationPage';
+import { MessagingPage } from '../features/messaging/MessagingPage';
+import { ItineraryPage } from '../features/trips/ItineraryPage';
 import { AuthPage, AccountPage, MediaPage } from '../features/auth/pages';
 import { RequireSession } from '../features/auth/guards';
 import { AuthLayout, HostLayout, SiteLayout } from './layouts';
+import { AdminLayout } from './adminLayout';
+import { adminRoutes } from './adminRoutes';
 import { HealthPage, HomePage, NotFoundPage, RouteErrorPage } from './pages';
 
 export const router = createBrowserRouter([
@@ -47,6 +52,10 @@ export const router = createBrowserRouter([
         element: <ListingDetailPage />,
       },
       {
+        path: 'cohost-invitations/:token',
+        element: <AcceptInvitationPage />,
+      },
+      {
         path: 'checkout/:listingId',
         element: (
           <RequireSession role="user">
@@ -71,6 +80,30 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'trips/:id/itinerary',
+        element: (
+          <RequireSession role="user">
+            <ItineraryPage />
+          </RequireSession>
+        ),
+      },
+      {
+        path: 'messages',
+        element: (
+          <RequireSession role="user">
+            <MessagingPage />
+          </RequireSession>
+        ),
+      },
+      {
+        path: 'messages/:conversationId',
+        element: (
+          <RequireSession role="user">
+            <MessagingPage />
+          </RequireSession>
+        ),
+      },
+      {
         element: <AuthLayout />,
         children: [
           {
@@ -86,6 +119,11 @@ export const router = createBrowserRouter([
             element: <AuthPage mode="admin" />,
           },
         ],
+      },
+      {
+        path: 'admin',
+        element: <AdminLayout />,
+        children: adminRoutes,
       },
       {
         path: 'host',
@@ -106,6 +144,14 @@ export const router = createBrowserRouter([
           {
             path: 'today',
             element: <HostTodayPage />,
+          },
+          {
+            path: 'messages',
+            element: <MessagingPage isHost />,
+          },
+          {
+            path: 'messages/:conversationId',
+            element: <MessagingPage isHost />,
           },
           {
             path: 'listings',

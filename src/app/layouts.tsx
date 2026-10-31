@@ -18,12 +18,14 @@ export function Brand() {
 
 export function SiteLayout() {
   const location = useLocation();
-  const session = useSession();
+  const session = useSession('user');
   const [activeTab, setActiveTab] = useState<'stays' | 'experiences' | 'services'>('stays');
 
   const isHost = location.pathname.startsWith('/host');
+  const isAdmin = location.pathname.startsWith('/admin') && location.pathname !== '/admin/login';
 
   const user = session.identity?.subject_type === 'user' ? session.identity.user : null;
+
   const userInitials = user?.full_name
     ? user.full_name
         .split(' ')
@@ -31,17 +33,17 @@ export function SiteLayout() {
         .join('')
         .toUpperCase()
         .slice(0, 2)
-    : 'MK';
+    : '';
 
-  // In hosting view (/host/*), the dedicated HostLayout renders its own full-bleed sidebar
-  // and host header matching the reference PDF design.
-  if (isHost) {
+  // In hosting view (/host/*) or admin view (/admin/*), the dedicated shells render their own full-bleed layouts
+  // matching the reference PDF design.
+  if (isHost || isAdmin) {
     return (
-      <div className="site-wrapper host-site-wrapper">
+      <div className={`site-wrapper ${isHost ? 'host-site-wrapper' : 'admin-site-wrapper'}`}>
         <a className="skip-link" href="#main">
           Skip to content
         </a>
-        <main id="main" key={location.pathname} tabIndex={-1} className="host-main-container">
+        <main id="main" key={location.pathname} tabIndex={-1} className={isHost ? 'host-main-container' : 'admin-main-container'}>
           {session.status === 'ready' && session.error && (
             <p className="session-notice" role="alert">
               {session.error}
@@ -96,6 +98,16 @@ export function SiteLayout() {
 
           {/* Right: Switch to hosting / Globe / User pill */}
           <div className="header-right">
+            {user && (
+              <>
+                <NavLink to="/trips" className="switch-hosting-btn">
+                  Trips
+                </NavLink>
+                <NavLink to="/messages" className="switch-hosting-btn">
+                  Messages
+                </NavLink>
+              </>
+            )}
             <NavLink to="/host/listings" className="switch-hosting-btn">
               Switch to hosting
             </NavLink>
@@ -116,9 +128,9 @@ export function SiteLayout() {
             </button>
 
             <Link
-              to={session.identity ? '/account' : '/login'}
+              to={user ? '/account' : '/login'}
               className="user-menu-pill"
-              aria-label={session.identity ? 'Your account menu' : 'Log in menu'}
+              aria-label={user ? 'Your account menu' : 'Log in menu'}
             >
               <svg
                 width="16"
@@ -133,17 +145,25 @@ export function SiteLayout() {
                 <line x1="3" y1="6" x2="21" y2="6" />
                 <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
-              {user?.avatar_url ? (
-                <img
-                  src={user.avatar_url}
-                  alt={user.full_name || 'Profile'}
-                  className="user-avatar-circle"
-                  style={{ objectFit: 'cover' }}
-                />
+              {user ? (
+                user.avatar_url ? (
+                  <img
+                    src={user.avatar_url}
+                    alt={user.full_name || 'Profile'}
+                    className="user-avatar-circle"
+                    style={{ objectFit: 'cover' }}
+                  />
+                ) : (
+                  <span className="user-avatar-circle" aria-hidden="true">
+                    {userInitials || 'U'}
+                  </span>
+                )
               ) : (
-                <span className="user-avatar-circle" aria-hidden="true">
-                  {userInitials}
-                </span>
+                <div className="user-avatar-placeholder" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                  </svg>
+                </div>
               )}
             </Link>
           </div>
@@ -201,6 +221,8 @@ export function HostLayout() {
     defaultItems = ['Earnings'];
   } else if (path.includes('/reservations')) {
     defaultItems = ['Reservations'];
+  } else if (path.includes('/messages')) {
+    defaultItems = ['Messages'];
   }
 
   const breadcrumbItems = breadcrumbTrail || defaultItems;
@@ -554,20 +576,79 @@ export function HostLayout() {
 }
 
 export function AuthLayout() {
+  const location = useLocation();
+  const isAdminPortal = location.pathname.startsWith('/admin');
+
   return (
     <div className="auth-shell">
-      <div className="auth-story">
-        <p className="eyebrow">A place for your next chapter</p>
-        <h1>
-          Arrive somewhere.
-          <br />
-          <em>Feel at home.</em>
-        </h1>
-        <p>From city mornings to slower coastal days, a good stay starts here.</p>
-        <div className="abstract-window" aria-hidden="true">
-          <div />
+      {/* Left Column: Authentic Brand Narrative & Reference Listing Mock (Page 2) */}
+      <aside className="auth-story" aria-label="StayHub Brand Showcase">
+        <div className="auth-story-inner">
+          <div className="auth-story-brand">
+            <Link to="/" className="auth-story-logo" aria-label="StayHub Home">
+              <div className="brand-logo-icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2.1L1 12h3v9h6v-6h4v6h6v-9h3L12 2.1zm0 3.7l6 5.4V19h-2v-6H8v6H6v-7.8l6-5.4z" />
+                </svg>
+              </div>
+              <span className="brand-name">StayHub</span>
+            </Link>
+            <span className="auth-brand-badge">
+              {isAdminPortal ? 'Platform Operations' : 'Guest & Host Workspace'}
+            </span>
+          </div>
+
+          <div className="auth-story-hero">
+            <p className="auth-story-eyebrow">A PLACE FOR EVERY STAY</p>
+            <h1 className="auth-story-headline">
+              Arrive somewhere.
+              <span className="auth-story-accent">Feel at home.</span>
+            </h1>
+            <p className="auth-story-desc">
+              Discover unique architect-designed stays, manage boutique guest houses, or supervise platform operations across the global catalog.
+            </p>
+          </div>
+
+          {/* Reference Listing Preview Card (Base Guide Mock Page 2) */}
+          <div className="auth-preview-card" aria-hidden="true">
+            <div className="auth-preview-media">
+              <img
+                src="https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80"
+                alt="Azulejo Loft in Alfama"
+                className="auth-preview-img"
+              />
+              <span className="auth-preview-pill">Guest favorite</span>
+              <div className="auth-preview-like">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+              </div>
+            </div>
+            <div className="auth-preview-details">
+              <div className="auth-preview-header">
+                <h3 className="auth-preview-title">Azulejo Loft in Alfama</h3>
+                <span className="auth-preview-rating">★ 4.96 (212)</span>
+              </div>
+              <p className="auth-preview-meta">Lisbon · Entire loft · 2 guests</p>
+              <div className="auth-preview-price-row">
+                <span className="auth-preview-price"><strong>€128</strong> night</span>
+                <span className="auth-preview-dates">Oct 14–19</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="auth-story-footer">
+            <div className="auth-story-chips">
+              <span className="auth-token-chip">Figtree 800</span>
+              <span className="auth-token-chip">Teal #0b6b5d</span>
+              <span className="auth-token-chip">4px Base Grid</span>
+            </div>
+            <p className="auth-story-note">StayHub Platform & Design System · Desktop 1440 × 900</p>
+          </div>
         </div>
-      </div>
+      </aside>
+
+      {/* Right Column: Active Auth Form Screen */}
       <div className="auth-content">
         <Outlet />
       </div>

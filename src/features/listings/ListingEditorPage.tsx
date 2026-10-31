@@ -23,6 +23,10 @@ import { toForm, toMinor, wizardPatch, type WizardForm } from './wizard';
 import { SmartSetupWizard } from './SmartSetupWizard';
 import { LocationPickerMap } from './LocationPickerMap';
 import { saveListingCoordinates } from '../search/geo';
+import { PricingRulesPanel } from '../pricing/PricingRulesPanel';
+import { DateOverrideCalendar } from '../pricing/DateOverrideCalendar';
+import { IcalPanel } from '../ical/IcalPanel';
+import { CohostPanel } from '../cohosts/CohostPanel';
 
 export interface SectionItem {
   id: string;
@@ -60,8 +64,11 @@ export const SECTION_GROUPS: SectionGroup[] = [
     title: 'Pricing & calendar',
     sections: [
       { id: 'pricing', label: 'Pricing', wizardStep: 5 },
+      { id: 'pricing-rules', label: 'Rules & discounts', wizardStep: 5 },
+      { id: 'date-overrides', label: 'Date overrides', wizardStep: 5 },
       { id: 'booking-settings', label: 'Booking settings', wizardStep: 5 },
       { id: 'availability', label: 'Availability', wizardStep: 6 },
+      { id: 'ical', label: 'iCal sync', wizardStep: 6 },
     ],
   },
   {
@@ -160,8 +167,6 @@ function Editor({ initial }: { initial: HostListing }) {
     first_aid: true,
     fire_extinguisher: true,
   });
-  const [cohostEmail, setCohostEmail] = useState('');
-  const [cohostInvited, setCohostInvited] = useState(false);
   const [registrationNumber, setRegistrationNumber] = useState('');
 
   const [photos, setPhotos] = useState<Record<string, Media>>(() =>
@@ -351,6 +356,9 @@ function Editor({ initial }: { initial: HostListing }) {
         photos={photos}
         onUpdate={update}
         onSaveAndExit={() => {
+          if (dirty) {
+            void save(step);
+          }
           const next = new URLSearchParams(searchParams);
           next.delete('mode');
           setSearchParams(next);
@@ -774,6 +782,30 @@ function Editor({ initial }: { initial: HostListing }) {
                 </div>
               )}
 
+              {/* PRICING RULES */}
+              {activeSection === 'pricing-rules' && (
+                <div className="editor-section-content">
+                  <PricingRulesPanel
+                    listingId={detail.listing.id}
+                    basePriceMinor={
+                      detail.working_version?.base_price_minor || detail.live_version?.base_price_minor || 10000
+                    }
+                  />
+                </div>
+              )}
+
+              {/* DATE OVERRIDES */}
+              {activeSection === 'date-overrides' && (
+                <div className="editor-section-content">
+                  <DateOverrideCalendar
+                    listingId={detail.listing.id}
+                    basePriceMinor={
+                      detail.working_version?.base_price_minor || detail.live_version?.base_price_minor || 10000
+                    }
+                  />
+                </div>
+              )}
+
               {/* BOOKING SETTINGS */}
               {activeSection === 'booking-settings' && (
                 <div className="editor-section-content">
@@ -1022,82 +1054,7 @@ function Editor({ initial }: { initial: HostListing }) {
               {/* CO-HOSTS */}
               {activeSection === 'cohosts' && (
                 <div className="editor-section-content">
-                  <h2 className="editor-section-heading">Co-hosts & Team</h2>
-                  <p className="editor-section-sub">
-                    Invite team members to assist with guest messaging, check-ins, or calendar
-                    maintenance.
-                  </p>
-                  <div className="editor-card-list">
-                    <div className="editor-cohost-item">
-                      <div className="editor-cohost-avatar">H</div>
-                      <div className="editor-cohost-meta">
-                        <strong style={{ fontSize: '14px', color: '#111827' }}>
-                          Primary Host (You)
-                        </strong>
-                        <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                          Full access · Listing owner & primary payout recipient
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: '24px',
-                      padding: '20px',
-                      background: '#f9fafb',
-                      borderRadius: '12px',
-                      border: '1px solid #eaedf0',
-                    }}
-                  >
-                    <h3
-                      style={{
-                        fontSize: '15px',
-                        fontWeight: 700,
-                        margin: '0 0 8px',
-                        color: '#111827',
-                      }}
-                    >
-                      Invite a new co-host
-                    </h3>
-                    <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 16px' }}>
-                      Co-hosts can manage reservations, message guests, or help update listing
-                      details based on permissions you choose.
-                    </p>
-                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                      <input
-                        type="email"
-                        placeholder="cohost@example.com"
-                        value={cohostEmail}
-                        onChange={(e) => setCohostEmail(e.target.value)}
-                        style={{
-                          flex: '1',
-                          minWidth: '220px',
-                          padding: '10px 14px',
-                          borderRadius: '8px',
-                          border: '1px solid #d1d5db',
-                          fontSize: '14px',
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          if (cohostEmail.trim()) {
-                            setCohostInvited(true);
-                            setCohostEmail('');
-                          }
-                        }}
-                        disabled={!cohostEmail.trim()}
-                      >
-                        Send invitation
-                      </Button>
-                    </div>
-                    {cohostInvited && (
-                      <div style={{ marginTop: '12px', fontSize: '13px', color: '#047857' }}>
-                        ✓ Invitation sent. They will appear here once they accept the invite.
-                      </div>
-                    )}
-                  </div>
+                  <CohostPanel listingId={detail.listing.id} />
                 </div>
               )}
 
@@ -1309,6 +1266,13 @@ function Editor({ initial }: { initial: HostListing }) {
                       Open Availability Calendar ↗
                     </Link>
                   </div>
+                </div>
+              )}
+
+              {/* ICAL SYNC */}
+              {activeSection === 'ical' && (
+                <div className="editor-section-content">
+                  <IcalPanel listingId={detail.listing.id} />
                 </div>
               )}
 
